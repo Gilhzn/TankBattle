@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { STAGES } from '../maps/stages.js';
+import { ARENAS } from '../maps/arenas.js';
 import { parseCells } from '../maps/format.js';
-import { BASE_TILE_X, BASE_TILE_Y, ENEMY_SPAWN_TILES, GRID, PLAYER_SPAWN_TILES, TANK_SIZE, TILE } from '../constants.js';
+import { BASE_TILE_X, BASE_TILE_Y, ENEMY_SPAWN_TILES, GRID, PLAYER_SPAWN_TILES, TANK_SIZE, TILE, VERSUS_SPAWN_TILES } from '../constants.js';
 import { getTile } from '../grid.js';
 import { Tile } from '../types.js';
 
@@ -72,5 +73,49 @@ describe('stages', () => {
     const first = STAGES[0].cells.join('');
     expect(first).toContain('~');
     expect(first).toContain('%');
+  });
+});
+
+describe('versus arenas', () => {
+  it('are all 13x13 cells', () => {
+    for (const a of ARENAS) {
+      expect(a.cells, a.name).toHaveLength(13);
+      for (const row of a.cells) expect(row, `${a.name}: "${row}"`).toHaveLength(13);
+    }
+  });
+
+  it('are symmetric on both axes, so no spawn corner is favoured', () => {
+    for (const a of ARENAS) {
+      for (let r = 0; r < 13; r++) {
+        expect(a.cells[r], `${a.name} row ${r} is not left-right symmetric`).toBe([...a.cells[r]].reverse().join(''));
+        expect(a.cells[r], `${a.name} row ${r} does not mirror row ${12 - r}`).toBe(a.cells[12 - r]);
+      }
+    }
+  });
+
+  it('let every corner reach every other corner past the permanent terrain', () => {
+    for (const a of ARENAS) {
+      const tiles = parseCells(a.cells, false);
+      const [first, ...rest] = VERSUS_SPAWN_TILES;
+      const reachableFromFirst = reachable(tiles, first[0], first[1]);
+      expect(reachableFromFirst.size, `${a.name}: spawn corner is walled in`).toBeGreaterThan(60);
+      for (const [tx, ty] of rest) {
+        expect(reachableFromFirst.has(ty * GRID + tx), `${a.name}: corner ${tx},${ty} is cut off`).toBe(true);
+      }
+    }
+  });
+
+  it('keeps all four spawn corners clear of obstacles', () => {
+    const span = TANK_SIZE / TILE;
+    for (const a of ARENAS) {
+      const tiles = parseCells(a.cells, false);
+      for (const [tx, ty] of VERSUS_SPAWN_TILES) {
+        for (let y = ty; y < ty + span; y++) {
+          for (let x = tx; x < tx + span; x++) {
+            expect(getTile(tiles, x, y), `${a.name}: spawn tile ${x},${y} is blocked`).toBe(Tile.EMPTY);
+          }
+        }
+      }
+    }
   });
 });

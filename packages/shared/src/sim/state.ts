@@ -3,7 +3,7 @@ import {
 } from '../constants.js';
 import { Rng, hashString } from '../rng.js';
 import { getStageDef, expandRoster } from '../maps/generator.js';
-import { VERSUS_ARENA } from '../maps/stages.js';
+import { ARENAS } from '../maps/arenas.js';
 import { parseCells } from '../maps/format.js';
 import type { DifficultyTuning } from '../constants.js';
 import type { Difficulty, GameMode, GameState, PlayerSlot, StageDef, VersusFormat } from '../types.js';
@@ -84,7 +84,9 @@ export function tuningOf(state: GameState): DifficultyTuning {
 }
 
 export function stageDefFor(state: GameState, stage: number): StageDef {
-  return state.mode === 'versus' ? VERSUS_ARENA : getStageDef(stage);
+  // A versus match carries its arena index in `stage`: the matchmaker derives it from the players'
+  // rating band, so the map visibly changes every 100 points instead of always being the same room.
+  return state.mode === 'versus' ? ARENAS[((stage % ARENAS.length) + ARENAS.length) % ARENAS.length] : getStageDef(stage);
 }
 
 /** Resets the field for a stage, keeping player lives/score/tier. */

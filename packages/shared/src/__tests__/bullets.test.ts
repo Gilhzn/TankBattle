@@ -118,6 +118,11 @@ describe('bullets', () => {
       fillTiles(s, () => Tile.EMPTY);
       const a = p0Tank(s);
       const b = s.tanks.find((t) => t.owner === 1)!;
+      // Placed absolutely: versus spawns in the corners, so anything relative to a spawn position
+      // can fall off the grid.
+      a.x = 10 * TILE;
+      a.y = 10 * TILE;
+      a.dir = 0;
       b.x = a.x;
       b.y = a.y - 5 * TILE;
       b.shieldUntil = 0;

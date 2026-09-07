@@ -1,17 +1,21 @@
 import {
-  MAX_TIER, PLAYER_SPEED, PLAYER_SPAWN_TILES, RESPAWN_DELAY_TICKS, RESPAWN_SHIELD_TICKS, TANK_SIZE, TILE, GRID, ICE_SLIDE_TICKS, VERSUS_KILL_SCORE,
+  MAX_TIER, PLAYER_SPEED, PLAYER_SPAWN_TILES, RESPAWN_DELAY_TICKS, RESPAWN_SHIELD_TICKS, TANK_SIZE, TILE, GRID, ICE_SLIDE_TICKS, VERSUS_KILL_SCORE, VERSUS_SPAWN_TILES,
 } from '../constants.js';
-import type { GameState, Input, PlayerSlot, Tank } from '../types.js';
+import type { GameMode, GameState, Input, PlayerSlot, Tank } from '../types.js';
 import { moveTank, positionFree, tankOnIce } from './movement.js';
 import { tryFire } from './bullets.js';
 
-export function playerSpawnPos(slot: number): { x: number; y: number } {
+export function playerSpawnPos(slot: number, mode: GameMode = 'coop'): { x: number; y: number } {
+  if (mode === 'versus') {
+    const [tx, ty] = VERSUS_SPAWN_TILES[slot % VERSUS_SPAWN_TILES.length];
+    return { x: tx * TILE, y: ty * TILE };
+  }
   const tx = PLAYER_SPAWN_TILES[slot % PLAYER_SPAWN_TILES.length];
   return { x: tx * TILE, y: (GRID - 2) * TILE };
 }
 
 export function spawnPlayerTank(state: GameState, p: PlayerSlot): Tank | null {
-  const pos = playerSpawnPos(p.slot);
+  const pos = playerSpawnPos(p.slot, state.mode);
   if (!positionFree(state, null, pos.x, pos.y, true)) {
     // try neighbouring lanes so a blocked spawn never soft-locks a player
     let found = false;

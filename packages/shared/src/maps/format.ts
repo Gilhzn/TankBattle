@@ -1,4 +1,4 @@
-import { GRID, ENEMY_SPAWN_TILES, PLAYER_SPAWN_TILES, BASE_TILE_X, BASE_TILE_Y } from '../constants.js';
+import { GRID, ENEMY_SPAWN_TILES, PLAYER_SPAWN_TILES, VERSUS_SPAWN_TILES, BASE_TILE_X, BASE_TILE_Y } from '../constants.js';
 import { Tile, type TileId } from '../types.js';
 import { baseRingTiles, baseTiles, tileIndex } from '../grid.js';
 
@@ -35,6 +35,11 @@ export function parseCells(cells: string[], withBase = true): Uint8Array {
   } else {
     for (const [tx, ty] of baseRingTiles()) tiles[tileIndex(tx, ty)] = Tile.EMPTY;
     for (const [tx, ty] of baseTiles()) tiles[tileIndex(tx, ty)] = Tile.EMPTY;
+    // Versus seats the players in the four corners instead of along the bottom, so those are the
+    // squares that must be guaranteed clear.
+    for (const [tx, ty] of VERSUS_SPAWN_TILES) {
+      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) tiles[tileIndex(tx + dx, ty + dy)] = Tile.EMPTY;
+    }
   }
   // keep the bottom lane between the player spawns walkable (the base ring is the only obstacle there)
   for (let tx = PLAYER_SPAWN_TILES[2]; tx < PLAYER_SPAWN_TILES[3] + 2; tx++) {

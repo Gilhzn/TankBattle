@@ -4,6 +4,8 @@ export * from './rng.js';
 export * from './grid.js';
 export * from './maps/format.js';
 export * from './maps/stages.js';
+export * from './maps/arenas.js';
+export * from './rating.js';
 export * from './maps/generator.js';
 export * from './sim/state.js';
 export * from './sim/step.js';

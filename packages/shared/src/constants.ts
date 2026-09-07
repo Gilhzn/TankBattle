@@ -85,5 +85,16 @@ export const DIRS: ReadonlyArray<readonly [number, number]> = [
 export const ENEMY_SPAWN_TILES = [0, 12, 24];
 /** Player spawn tiles (x) along the bottom row, by slot. */
 export const PLAYER_SPAWN_TILES = [8, 16, 4, 20];
+/**
+ * Versus spawn corners, by slot. Co-op lines everyone up along the bottom to defend the base, but a
+ * duel needs the seats spread: slots 0/2 take the top corners and 1/3 the bottom, so in 2v2 (teams
+ * 0+2 against 1+3) the sides start facing each other across the arena.
+ */
+export const VERSUS_SPAWN_TILES: Array<[number, number]> = [
+  [0, 0],
+  [GRID - 2, GRID - 2],
+  [GRID - 2, 0],
+  [0, GRID - 2],
+];
 export const BASE_TILE_X = 12;
 export const BASE_TILE_Y = 24;
