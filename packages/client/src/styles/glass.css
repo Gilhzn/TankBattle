@@ -1,9 +1,12 @@
+/* Named .glass for history; these are armour plates: dark keyline, lit top bevel, solid footing. */
 .glass {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  box-shadow: var(--glass-glow), var(--shadow);
+  background: var(--plate);
+  border: var(--stroke) solid var(--keyline);
+  box-shadow:
+    inset 0 var(--stroke) 0 var(--bevel),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 4px 0 #0a1120,
+    var(--shadow);
 }
 .panel {
   border-radius: var(--radius-l);
@@ -12,6 +15,9 @@
 }
 .panel > h2:first-child {
   margin-block-start: 0;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  text-shadow: var(--text-stamp);
 }
 
 /* animated menu background: cheap CSS gradient drift + floating sparks */

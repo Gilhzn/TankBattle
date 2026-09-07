@@ -28,7 +28,7 @@ export function screenShell(title: string, opts: { back?: string; right?: Child;
   return { el, body, header };
 }
 
-export function button(label: Child, opts: { kind?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent'; testid?: string; onClick?: (e: MouseEvent) => void; disabled?: boolean; className?: string; big?: boolean; type?: 'button' | 'submit' } = {}): HTMLButtonElement {
+export function button(label: Child, opts: { kind?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent' | 'info' | 'confirm'; testid?: string; onClick?: (e: MouseEvent) => void; disabled?: boolean; className?: string; big?: boolean; type?: 'button' | 'submit' } = {}): HTMLButtonElement {
   const b = h(
     'button',
     {

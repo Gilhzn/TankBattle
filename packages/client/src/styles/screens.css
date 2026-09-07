@@ -93,76 +93,106 @@ html[dir='rtl'] .btn.back .chev {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
   border-radius: 999px;
-  min-height: 60px;
+  min-height: 62px;
 }
 .profile-name {
+  font-family: var(--font-display);
   font-weight: 800;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
+/* Currency reads as minted counters, the way a live-service game shows a balance. */
 .profile-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
+  margin-block-start: 3px;
   font-size: var(--fs-s);
-  color: var(--fg-muted);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.currency {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px 2px 4px;
+  border-radius: 999px;
+  background: var(--plate-sunken);
+  border: 1px solid var(--keyline);
+  box-shadow: inset 0 1px 0 var(--bevel-soft);
+}
+.currency.coins {
+  color: var(--brass);
+}
+.currency.gems {
+  color: var(--cyan);
 }
 .profile-meta .gem-icon {
-  margin-inline-start: 8px;
+  margin-inline-start: 0;
 }
 .net-status {
   font-size: var(--fs-xs);
-  font-weight: 700;
-  padding: 4px 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 12px;
   border-radius: 999px;
-  border: 1px solid var(--glass-border);
+  background: var(--plate-sunken);
+  border: 1px solid var(--keyline);
+  box-shadow: inset 0 1px 0 var(--bevel-soft);
   color: var(--fg-muted);
 }
 .net-status.online {
   color: var(--lime);
-  border-color: rgba(182, 255, 94, 0.4);
 }
 .net-status.offline {
   color: var(--amber);
-  border-color: rgba(255, 209, 102, 0.4);
 }
 .menu-hero {
   text-align: center;
-  padding-block: clamp(8px, 4vh, 40px);
+  padding-block: clamp(6px, 3vh, 32px);
+  margin-block-start: auto;
 }
 .logo {
   display: flex;
   flex-direction: column;
   align-items: center;
-  line-height: 0.95;
+  line-height: 0.92;
   font-family: var(--font-display);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
+/* Stamped metal: a bright face over a dark rim, the way a game logo is die-cut. */
 .logo-tank {
   font-size: var(--fs-hero);
-  background: linear-gradient(180deg, #fff, var(--amber));
+  color: #fff3d0;
+  background: linear-gradient(180deg, #fffaf0 0%, var(--brass) 55%, var(--brass-deep) 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 18px rgba(255, 209, 102, 0.35));
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 3px 0 var(--brass-edge)) drop-shadow(0 6px 18px rgba(255, 194, 71, 0.35));
 }
 .logo-year {
-  font-size: calc(var(--fs-hero) * 1.15);
-  background: linear-gradient(180deg, var(--cyan), #2f7bff);
+  font-size: calc(var(--fs-hero) * 1.16);
+  background: linear-gradient(180deg, #ffffff 0%, var(--cyan) 50%, var(--cyan-deep) 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 24px rgba(94, 225, 255, 0.4));
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 3px 0 var(--cyan-edge)) drop-shadow(0 6px 22px rgba(94, 225, 255, 0.4));
 }
 .logo-online {
   font-size: var(--fs-l);
-  letter-spacing: 0.5em;
-  margin-inline-start: 0.5em;
+  letter-spacing: 0.52em;
+  margin-inline-start: 0.52em;
+  margin-block-start: 4px;
   color: var(--magenta);
-  text-shadow: 0 0 16px rgba(255, 94, 196, 0.6);
+  text-shadow: 0 2px 0 var(--magenta-edge), 0 0 18px rgba(255, 94, 196, 0.55);
 }
 .tagline {
   color: var(--fg-muted);
   margin-block-start: var(--space-3);
+  font-weight: 600;
 }
 .menu-nav {
   width: min(520px, 100%);
@@ -177,7 +207,7 @@ html[dir='rtl'] .btn.back .chev {
   gap: var(--space-3);
 }
 .menu-grid .btn {
-  min-height: 52px;
+  min-height: 54px;
   font-size: var(--fs);
 }
 .daily-btn {
@@ -185,7 +215,7 @@ html[dir='rtl'] .btn.back .chev {
 }
 @keyframes pulse {
   50% {
-    box-shadow: 0 8px 36px rgba(255, 94, 196, 0.45);
+    filter: brightness(1.14);
   }
 }
 .menu-footer {
@@ -447,8 +477,25 @@ html[dir='rtl'] .btn.back .chev {
   gap: var(--space-4);
   align-items: center;
   z-index: 5;
-  min-width: min(320px, 90%);
+  min-width: min(340px, 92%);
   text-align: center;
+  animation: modal-in 0.3s cubic-bezier(0.2, 1.25, 0.4, 1);
+}
+.pause-overlay > h2:first-child,
+.revive-prompt > h2:first-child {
+  align-self: stretch;
+}
+.pause-overlay .row,
+.revive-prompt .row {
+  display: flex;
+  gap: var(--space-3);
+  align-self: stretch;
+}
+.pause-overlay .row .btn,
+.revive-prompt .row .btn {
+  flex: 1;
+  padding-inline: var(--space-3);
+  white-space: nowrap;
 }
 
 /* landscape: field height = viewport, HUD overlays the field top, controls in side gutters */

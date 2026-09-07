@@ -29,8 +29,8 @@ export function menuScreen(root: HTMLElement): () => void {
       h('div', { class: 'profile-text' },
         h('div', { class: 'profile-name', dataset: { testid: 'profile-name' } }, name),
         h('div', { class: 'profile-meta' },
-          h('span', { class: 'coin-icon' }), h('span', { dataset: { testid: 'profile-coins' } }, s.wallet.coins.toLocaleString()),
-          h('span', { class: 'gem-icon' }), h('span', { dataset: { testid: 'profile-gems' } }, s.wallet.gems.toLocaleString()),
+          h('span', { class: 'currency coins' }, h('span', { class: 'coin-icon' }), h('span', { dataset: { testid: 'profile-coins' } }, s.wallet.coins.toLocaleString())),
+          h('span', { class: 'currency gems' }, h('span', { class: 'gem-icon' }), h('span', { dataset: { testid: 'profile-gems' } }, s.wallet.gems.toLocaleString())),
           s.battlepass ? h('span', { class: 'chip' }, t('menu.tier', { tier: s.battlepass.tier })) : null,
         ),
       ),
@@ -46,7 +46,7 @@ export function menuScreen(root: HTMLElement): () => void {
     }
   };
 
-  const nav = (label: string, path: string, testid: string, kind: 'primary' | 'secondary' | 'ghost' = 'secondary', extra?: HTMLElement): HTMLButtonElement =>
+  const nav = (label: string, path: string, testid: string, kind: 'primary' | 'secondary' | 'ghost' | 'info' = 'secondary', extra?: HTMLElement): HTMLButtonElement =>
     button([label, extra ?? null], { kind, big: true, testid, onClick: () => navigate(path) });
 
   const el = h(
@@ -59,7 +59,7 @@ export function menuScreen(root: HTMLElement): () => void {
       h('p', { class: 'tagline' }, t('app.tagline')),
     ),
     h('nav', { class: 'menu-nav' },
-      nav(t('menu.playSolo'), '/play', 'menu-play-solo', 'primary'),
+      nav(t('menu.playSolo'), '/play', 'menu-play-solo', 'info'),
       nav(t('menu.multiplayer'), '/lobby', 'menu-multiplayer', 'primary'),
       h('div', { class: 'menu-grid' },
         nav(t('menu.store'), '/store', 'menu-store'),

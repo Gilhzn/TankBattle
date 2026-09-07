@@ -1,24 +1,62 @@
+/*
+ * Armoured-plate design system: every surface is a physical object — a dark keyline, a lit top
+ * bevel, and a solid bottom edge that compresses when pressed. Colours come from the game's own
+ * world (gunmetal, brass shell casings, tracer neon) rather than a generic UI palette.
+ */
 :root {
   color-scheme: dark;
-  --bg: #07090f;
-  --bg-2: #0d1220;
-  --bg-3: #121a2e;
+
+  /* ground and plating */
+  --bg: #080c15;
+  --bg-2: #0e1524;
+  --bg-3: #16203a;
+  --plate: linear-gradient(180deg, #1d2842 0%, #141d33 100%);
+  --plate-raised: linear-gradient(180deg, #26355a 0%, #1a2440 100%);
+  --plate-sunken: linear-gradient(180deg, #0d1424 0%, #121a2e 100%);
+  --keyline: #05080f;
+  --bevel: rgba(255, 255, 255, 0.16);
+  --bevel-soft: rgba(255, 255, 255, 0.08);
+
   --fg: #eef3ff;
-  --fg-muted: rgba(238, 243, 255, 0.62);
-  --fg-faint: rgba(238, 243, 255, 0.38);
+  --fg-muted: rgba(238, 243, 255, 0.66);
+  --fg-faint: rgba(238, 243, 255, 0.4);
+  --ink: #06101c;
+
+  /* accents: brass drives the primary action, tracer colours carry meaning */
+  --brass: #ffc247;
+  --brass-deep: #e08c12;
+  --brass-edge: #6d3f05;
   --cyan: #5ee1ff;
+  --cyan-deep: #2a86d8;
+  --cyan-edge: #103f66;
   --magenta: #ff5ec4;
+  --magenta-deep: #cc2f8c;
+  --magenta-edge: #61123f;
   --lime: #b6ff5e;
+  --lime-deep: #6fbf1f;
+  --lime-edge: #2f5c0a;
   --amber: #ffd166;
   --danger: #ff6b6b;
-  --glass: rgba(18, 24, 44, 0.55);
-  --glass-strong: rgba(14, 19, 36, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-glow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 24px rgba(94, 225, 255, 0.05);
-  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --danger-deep: #d33b3b;
+  --danger-edge: #6b1414;
+
+  /* depth */
+  --stroke: 2px;
+  --edge: 5px;
+  --edge-sm: 3px;
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 20px 48px rgba(0, 0, 0, 0.6);
+  --plate-inner: inset 0 var(--stroke) 0 var(--bevel), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+
+  /* kept for compatibility with existing panel classes */
+  --glass: linear-gradient(180deg, #1d2842 0%, #141d33 100%);
+  --glass-strong: linear-gradient(180deg, #22304f 0%, #161f38 100%);
+  --glass-border: var(--keyline);
+  --glass-glow: var(--plate-inner);
+
   --radius-s: 10px;
-  --radius: 16px;
-  --radius-l: 24px;
+  --radius: 14px;
+  --radius-l: 20px;
   --tap: 48px;
   --space-1: 4px;
   --space-2: 8px;
@@ -26,14 +64,18 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+
   --font: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, 'Heebo', 'Noto Sans Hebrew', sans-serif;
-  --font-display: 'Avenir Next', 'Segoe UI Black', ui-rounded, system-ui, sans-serif;
+  --font-display: ui-rounded, 'SF Pro Rounded', 'Segoe UI Black', system-ui, sans-serif;
   --fs-xs: clamp(0.72rem, 0.68rem + 0.2vw, 0.82rem);
   --fs-s: clamp(0.85rem, 0.8rem + 0.3vw, 0.95rem);
   --fs: clamp(0.98rem, 0.9rem + 0.4vw, 1.1rem);
   --fs-l: clamp(1.15rem, 1rem + 0.8vw, 1.4rem);
   --fs-xl: clamp(1.5rem, 1.2rem + 1.6vw, 2.2rem);
   --fs-hero: clamp(2.4rem, 1.6rem + 5vw, 4.6rem);
+  /* stamped display text: a dark rim so headings read on any plate */
+  --text-stamp: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 0, 0, 0.35);
+
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
