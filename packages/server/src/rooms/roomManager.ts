@@ -1,4 +1,4 @@
-import type { Difficulty } from '@tank/shared';
+import type { Difficulty, VersusFormat } from '@tank/shared';
 import type { GameRunner } from '../game/runner.js';
 import { newId, newJoinCode } from '../util/ids.js';
 import type { Logger } from '../util/log.js';
@@ -35,10 +35,19 @@ export class RoomManager {
     return this.byCode.get(code.toUpperCase());
   }
 
-  create(user: RoomUser, link: PlayerLink, mode: 'coop' | 'versus', isPrivate: boolean, loadout: string[], quickPlay = false, difficulty: Difficulty = 'normal'): Room {
+  create(
+    user: RoomUser,
+    link: PlayerLink,
+    mode: 'coop' | 'versus',
+    isPrivate: boolean,
+    loadout: string[],
+    quickPlay = false,
+    difficulty: Difficulty = 'normal',
+    versusFormat: VersusFormat = 'ffa',
+  ): Room {
     let code = newJoinCode();
     while (this.byCode.has(code)) code = newJoinCode();
-    const room = new Room(newId(), code, mode, difficulty, isPrivate, quickPlay, {
+    const room = new Room(newId(), code, mode, difficulty, versusFormat, isPrivate, quickPlay, {
       clock: this.opts.clock,
       log: this.opts.log,
       countdownMs: this.opts.countdownMs,
@@ -62,14 +71,18 @@ export class RoomManager {
   }
 
   /** Joins the oldest public lobby with a free seat for the mode, or opens a new one. */
-  quickPlay(user: RoomUser, link: PlayerLink, mode: 'coop' | 'versus', loadout: string[]): { room: Room; created: boolean } {
-    const candidates = [...this.rooms.values()].filter((r) => r.mode === mode && !r.isPrivate && r.joinable && !r.player(user.id)).sort((a, b) => a.createdAt - b.createdAt);
+  quickPlay(user: RoomUser, link: PlayerLink, mode: 'coop' | 'versus', loadout: string[], versusFormat: VersusFormat = 'ffa'): { room: Room; created: boolean } {
+    // A 2v2 seeker must not be dropped into a free-for-all lobby (or the reverse): the format
+    // decides who may shoot whom, so it has to match before the seats are shared.
+    const candidates = [...this.rooms.values()]
+      .filter((r) => r.mode === mode && (mode !== 'versus' || r.versusFormat === versusFormat) && !r.isPrivate && r.joinable && !r.player(user.id))
+      .sort((a, b) => a.createdAt - b.createdAt);
     const room = candidates[0];
     if (room) {
       room.join(user, link, loadout);
       return { room, created: false };
     }
-    return { room: this.create(user, link, mode, false, loadout, true), created: true };
+    return { room: this.create(user, link, mode, false, loadout, true, 'normal', versusFormat), created: true };
   }
 
   remove(room: Room): void {

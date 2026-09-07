@@ -1,6 +1,6 @@
 import {
   PROTOCOL_VERSION, TICK_MS,
-  type ClientMessage, type Difficulty, type GameMode, type Input, type RoomStateMessage, type ServerMessage, type Snapshot, type TickEvent,
+  type ClientMessage, type Difficulty, type GameMode, type Input, type RoomStateMessage, type ServerMessage, type Snapshot, type TickEvent, type VersusFormat,
 } from '@tank/shared';
 import { Emitter, type GameTransport, type MetaEvent } from './transport.js';
 import { getToken } from '../app/api.js';
@@ -274,14 +274,14 @@ export class WsClient implements GameTransport {
   }
 
   // ---------- room ops ----------
-  createRoom(mode: GameMode, isPrivate: boolean, loadout: string[], difficulty: Difficulty = 'normal'): void {
-    this.send({ type: 'createRoom', mode, isPrivate, loadout, difficulty });
+  createRoom(mode: GameMode, isPrivate: boolean, loadout: string[], difficulty: Difficulty = 'normal', versusFormat: VersusFormat = 'ffa'): void {
+    this.send({ type: 'createRoom', mode, isPrivate, loadout, difficulty, versusFormat });
   }
   joinRoom(code: string, loadout: string[]): void {
     this.send({ type: 'joinRoom', code: code.toUpperCase(), loadout });
   }
-  quickPlay(mode: GameMode, loadout: string[]): void {
-    this.send({ type: 'quickPlay', mode, loadout });
+  quickPlay(mode: GameMode, loadout: string[], versusFormat: VersusFormat = 'ffa'): void {
+    this.send({ type: 'quickPlay', mode, loadout, versusFormat });
   }
   leaveRoom(): void {
     this.send({ type: 'leaveRoom' });

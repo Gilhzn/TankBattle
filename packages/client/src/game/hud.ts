@@ -91,7 +91,11 @@ export class Hud {
     const now = performance.now();
     for (const [slot, until] of this.pulses) if (until <= now) this.pulses.delete(slot);
     const livesKey =
-      view.players.map((p) => `${p.slot}:${p.name}:${p.lives}:${p.score}:${p.active}:${p.skin}:${p.kills}:${this.pulses.has(p.slot) ? 1 : 0}`).join('|') + info.mySlot;
+      view.players
+        .map((p) => `${p.slot}:${p.name}:${p.lives}:${p.score}:${p.active}:${p.skin}:${p.kills}:${p.team}:${this.pulses.has(p.slot) ? 1 : 0}`)
+        .join('|') +
+      info.mySlot +
+      view.versusFormat;
     if (livesKey !== L.lives) {
       L.lives = livesKey;
       clear(this.livesEl);
@@ -103,12 +107,20 @@ export class Hud {
           h(
             'div',
             {
-              class: `hud-player${isMe ? ' me' : ''}${this.pulses.has(p.slot) ? ' gained' : ''}`,
+              class:
+                `hud-player${isMe ? ' me' : ''}${this.pulses.has(p.slot) ? ' gained' : ''}` +
+                (view.versusFormat === 'teams' && p.team >= 0 ? ` team-${p.team}` : '') +
+                (view.mode === 'versus' && p.lives <= 0 ? ' out' : ''),
               style: { '--pc': skin.primary } as unknown as Partial<CSSStyleDeclaration>,
               dataset: { slot: String(p.slot), lives: String(p.lives) },
             },
             h('span', { class: 'hud-player-name' }, isMe && info.mode === 'local' ? t('common.you') : p.name || `P${p.slot + 1}`),
-            h('span', { class: 'hud-player-lives', attrs: { 'aria-label': t('hud.lives') } }, view.mode === 'versus' ? `☠ ${p.kills}` : `♥ ${p.lives}`),
+            // Versus lives are now finite, so they matter as much as the kill count: show both.
+            h(
+              'span',
+              { class: 'hud-player-lives', attrs: { 'aria-label': t('hud.lives') } },
+              view.mode === 'versus' ? `♥ ${p.lives} · ☠ ${p.kills}` : `♥ ${p.lives}`,
+            ),
             h('span', { class: 'hud-player-score' }, p.score.toLocaleString()),
           ),
         );

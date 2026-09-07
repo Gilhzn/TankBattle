@@ -370,6 +370,21 @@ html[dir='rtl'] .btn.back .chev {
 .hud-player-lives {
   color: var(--danger);
 }
+/* 2v2: a band above the chip says which side a player is on, so a glance at the HUD tells you who
+   your partner is without matching skin colours. */
+.hud-player.team-0 {
+  box-shadow: inset 0 3px 0 var(--cyan);
+}
+.hud-player.team-1 {
+  box-shadow: inset 0 3px 0 var(--magenta);
+}
+/* Out of lives: still listed (their score stands) but visibly finished. */
+.hud-player.out {
+  opacity: 0.45;
+}
+.hud-player.out .hud-player-name {
+  text-decoration: line-through;
+}
 /* An extra life is the one pickup with no effect on the tank itself, so the counter it does change
    announces itself for a moment. */
 .hud-player.gained {

@@ -1,5 +1,5 @@
 import {
-  createInitialState, encodeSnapshot, matchRewards, stageDefFor, step,
+  createInitialState, encodeSnapshot, matchRewards, stageDefFor, step, versusWinningTeams,
   type Command, type GameState, type Input, type MatchResult, type ServerMessage, type TickEvent,
 } from '@tank/shared';
 import { boostOrNull } from '../economy/catalog.js';
@@ -49,7 +49,7 @@ export class GameRunner {
     this.seed = newSeed();
     this.tickMs = 1000 / deps.tickRate;
     const players = [...room.players].sort((a, b) => a.slot - b.slot).map((p) => ({ id: p.id, name: p.name, skin: p.skin }));
-    this.state = createInitialState(this.seed, this.startStage, players, room.mode, room.difficulty);
+    this.state = createInitialState(this.seed, this.startStage, players, room.mode, room.difficulty, room.versusFormat);
   }
 
   get tick(): number {
@@ -211,7 +211,9 @@ export class GameRunner {
     const st = this.state;
     const coop = st.mode === 'coop';
     const stagesCleared = Math.max(0, st.stage - this.startStage);
-    const topScore = Math.max(0, ...st.players.filter((p) => p.active).map((p) => p.score));
+    // Versus is won by the last side standing, not by score: a player who survives on one life
+    // beats one who racked up points and then ran out of lives.
+    const winners = coop ? [] : versusWinningTeams(st);
     const results: MatchResult[] = [];
     for (const p of this.room.players) {
       const ps = st.players[p.slot];
@@ -225,7 +227,11 @@ export class GameRunner {
       } catch (err) {
         this.deps.log.error(`room ${this.room.code}: failed to record result for ${p.id}`, err);
       }
-      results.push({ playerId: p.id, name: p.name, slot: p.slot, score: ps.score, kills: ps.kills, deaths: ps.deaths, stageReached: st.stage, coins, xp, won: coop ? stagesCleared > 0 : ps.score >= topScore && topScore > 0 });
+      results.push({
+        playerId: p.id, name: p.name, slot: p.slot, score: ps.score, kills: ps.kills, deaths: ps.deaths,
+        team: ps.team, stageReached: st.stage, coins, xp,
+        won: coop ? stagesCleared > 0 : winners.includes(ps.team),
+      });
     }
     this.room.broadcast({ type: 'gameOver', reason, results });
     for (const p of this.room.players) {

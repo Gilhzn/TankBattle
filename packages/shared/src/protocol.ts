@@ -1,19 +1,28 @@
 import { z } from 'zod';
+import type { VersusFormat } from './types.js';
 
 export const PROTOCOL_VERSION = 1;
 
 const dirSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(-1)]);
 const modeSchema = z.enum(['coop', 'versus']);
 export const difficultySchema = z.enum(['easy', 'normal', 'hard']);
+export const versusFormatSchema = z.enum(['ffa', 'teams']);
 const codeSchema = z.string().regex(/^[A-Z2-9]{5}$/);
 export const nicknameSchema = z.string().trim().min(2).max(16).regex(/^[\p{L}\p{N} _.-]+$/u);
 export const skuSchema = z.string().regex(/^[a-z0-9_]{2,40}$/);
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), token: z.string().min(10).max(2048), version: z.number().int() }),
-  z.object({ type: z.literal('createRoom'), mode: modeSchema, isPrivate: z.boolean().default(false), loadout: z.array(skuSchema).max(6).default([]), difficulty: difficultySchema.default('normal') }),
+  z.object({
+    type: z.literal('createRoom'),
+    mode: modeSchema,
+    isPrivate: z.boolean().default(false),
+    loadout: z.array(skuSchema).max(6).default([]),
+    difficulty: difficultySchema.default('normal'),
+    versusFormat: versusFormatSchema.default('ffa'),
+  }),
   z.object({ type: z.literal('joinRoom'), code: codeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
-  z.object({ type: z.literal('quickPlay'), mode: modeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
+  z.object({ type: z.literal('quickPlay'), mode: modeSchema, loadout: z.array(skuSchema).max(6).default([]), versusFormat: versusFormatSchema.default('ffa') }),
   z.object({ type: z.literal('leaveRoom') }),
   z.object({ type: z.literal('setReady'), ready: z.boolean() }),
   z.object({ type: z.literal('setLoadout'), loadout: z.array(skuSchema).max(6) }),
@@ -35,6 +44,8 @@ export interface RoomPlayerInfo {
   loadout: string[];
   skin: string;
   isHost: boolean;
+  /** Side in a versus lobby: own slot in free-for-all, 0 or 1 in 2v2. -1 in co-op. */
+  team: number;
 }
 
 export type RoomStatus = 'lobby' | 'countdown' | 'playing' | 'stageClear' | 'gameOver';
@@ -44,6 +55,7 @@ export interface RoomStateMessage {
   roomId: string;
   code: string;
   mode: 'coop' | 'versus';
+  versusFormat: VersusFormat;
   isPrivate: boolean;
   status: RoomStatus;
   hostId: string;
@@ -59,6 +71,7 @@ export interface MatchResult {
   score: number;
   kills: number;
   deaths: number;
+  team: number;
   stageReached: number;
   coins: number;
   xp: number;

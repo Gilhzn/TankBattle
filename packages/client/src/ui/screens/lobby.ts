@@ -1,4 +1,4 @@
-import { CATALOG_BY_SKU, type GameMode, type RoomStateMessage, type ServerMessage } from '@tank/shared';
+import { CATALOG_BY_SKU, type GameMode, type RoomStateMessage, type ServerMessage, type VersusFormat } from '@tank/shared';
 import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { settings } from '../../app/settings.js';
@@ -20,6 +20,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
   root.appendChild(shell.el);
   const body = shell.body;
   let mode: GameMode = 'coop';
+  let versusFormat: VersusFormat = 'ffa';
   let isPrivate = false;
   let loadout = settings.get().mpLoadout.filter((s) => ownedBoosts().includes(s)).slice(0, MAX_LOADOUT);
   const chatLog: Array<{ name: string; text: string }> = [];
@@ -71,19 +72,43 @@ export function lobbyScreen(root: HTMLElement): () => void {
         h('button', { class: `seg-btn ${m === mode ? 'active' : ''}`, type: 'button', dataset: { testid: `lobby-mode-${m}` }, attrs: { role: 'radio', 'aria-checked': m === mode ? 'true' : 'false' }, onclick: () => { mode = m; renderHome(); } }, t(`lobby.${m}`)),
       ),
     );
+    // 2v2 is only a choice once you are actually playing against people.
+    const formatTabs = h(
+      'div',
+      { class: 'seg', attrs: { role: 'radiogroup' } },
+      ...(['ffa', 'teams'] as VersusFormat[]).map((f) =>
+        h(
+          'button',
+          {
+            class: `seg-btn ${f === versusFormat ? 'active' : ''}`,
+            type: 'button',
+            dataset: { testid: `lobby-format-${f}` },
+            attrs: { role: 'radio', 'aria-checked': f === versusFormat ? 'true' : 'false' },
+            onclick: () => {
+              versusFormat = f;
+              renderHome();
+            },
+          },
+          t(`lobby.format.${f}`),
+        ),
+      ),
+    );
     body.append(
       h('div', { class: 'lobby-status', dataset: { testid: 'lobby-status' } }),
       panel(
         h('h2', null, t('lobby.create')),
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('lobby.mode')), modeTabs),
+        ...(mode === 'versus'
+          ? [h('div', { class: 'field', dataset: { testid: 'lobby-format' } }, h('span', { class: 'field-label' }, t('lobby.formatLabel')), formatTabs, h('small', { class: 'muted' }, t(`lobby.format.${versusFormat}Hint`)))]
+          : []),
         h('label', { class: 'field row-field' }, h('span', null, t('lobby.private'), h('small', { class: 'muted' }, t('lobby.privateHint'))), toggle(isPrivate, (v) => (isPrivate = v), 'lobby-private')),
-        button(t('lobby.create'), { kind: 'primary', big: true, testid: 'lobby-create', onClick: () => { setStatus(t('common.loading')); ws.createRoom(mode, isPrivate, mode === 'versus' ? [] : loadout, settings.get().difficulty); } }),
+        button(t('lobby.create'), { kind: 'primary', big: true, testid: 'lobby-create', onClick: () => { setStatus(t('common.loading')); ws.createRoom(mode, isPrivate, mode === 'versus' ? [] : loadout, settings.get().difficulty, versusFormat); } }),
       ),
       panel(h('h2', null, t('lobby.joinTitle')), h('div', { class: 'join-row' }, code, joinBtn)),
       panel(
         h('h2', null, t('lobby.quickPlay')),
         h('p', { class: 'muted' }, t('lobby.quickPlayHint')),
-        button(`${t('lobby.quickPlay')} · ${t(`lobby.${mode}`)}`, { kind: 'accent', big: true, testid: 'lobby-quick', onClick: () => { setStatus(t('common.loading')); ws.quickPlay(mode, mode === 'versus' ? [] : loadout); } }),
+        button(`${t('lobby.quickPlay')} · ${t(`lobby.${mode}`)}`, { kind: 'accent', big: true, testid: 'lobby-quick', onClick: () => { setStatus(t('common.loading')); ws.quickPlay(mode, mode === 'versus' ? [] : loadout, versusFormat); } }),
       ),
     );
   };

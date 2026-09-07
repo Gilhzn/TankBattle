@@ -144,7 +144,7 @@ export class Session implements PlayerLink {
         return;
       case 'createRoom':
         this.leaveCurrent();
-        this.room = this.deps.rooms.create(this.roomUser(), this, msg.mode, msg.isPrivate, msg.loadout, false, msg.difficulty);
+        this.room = this.deps.rooms.create(this.roomUser(), this, msg.mode, msg.isPrivate, msg.loadout, false, msg.difficulty, msg.versusFormat);
         return;
       case 'joinRoom':
         this.leaveCurrent();
@@ -152,7 +152,7 @@ export class Session implements PlayerLink {
         return;
       case 'quickPlay': {
         this.leaveCurrent();
-        const { room } = this.deps.rooms.quickPlay(this.roomUser(), this, msg.mode, msg.loadout);
+        const { room } = this.deps.rooms.quickPlay(this.roomUser(), this, msg.mode, msg.loadout, msg.versusFormat);
         this.room = room;
         this.send({ type: 'matchFound', roomId: room.id });
         return;

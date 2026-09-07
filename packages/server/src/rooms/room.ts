@@ -1,5 +1,5 @@
 import type { Difficulty } from '@tank/shared';
-import { MAX_PLAYERS, type RoomPlayerInfo, type RoomStateMessage, type RoomStatus, type ServerMessage } from '@tank/shared';
+import { MAX_PLAYERS, teamOf, type RoomPlayerInfo, type RoomStateMessage, type RoomStatus, type ServerMessage, type VersusFormat } from '@tank/shared';
 import type { GameRunner } from '../game/runner.js';
 import { newNonce } from '../util/ids.js';
 import type { Logger } from '../util/log.js';
@@ -52,6 +52,7 @@ export class Room {
     readonly code: string,
     readonly mode: 'coop' | 'versus',
     readonly difficulty: Difficulty,
+    readonly versusFormat: VersusFormat,
     readonly isPrivate: boolean,
     readonly quickPlay: boolean,
     private readonly deps: RoomDeps,
@@ -64,7 +65,12 @@ export class Room {
     return this.players.length;
   }
   get isFull(): boolean {
-    return this.players.length >= MAX_PLAYERS;
+    return this.players.length >= this.capacity;
+  }
+
+  /** 2v2 needs exactly four seats; every other format fills up to the cap. */
+  get capacity(): number {
+    return MAX_PLAYERS;
   }
   get joinable(): boolean {
     return !this.destroyed && this.status === 'lobby' && !this.isFull;
@@ -227,8 +233,12 @@ export class Room {
   stateFor(playerId: string | null): RoomStateMessage {
     const players: RoomPlayerInfo[] = this.players.map((p) => ({
       id: p.id, name: p.name, slot: p.slot, ready: p.ready, connected: p.connected, loadout: [...p.loadout], skin: p.skin, isHost: p.id === this.hostId,
+      team: teamOf(p.slot, this.mode, this.versusFormat),
     }));
-    const msg: RoomStateMessage = { type: 'roomState', roomId: this.id, code: this.code, mode: this.mode, isPrivate: this.isPrivate, status: this.status, hostId: this.hostId, players };
+    const msg: RoomStateMessage = {
+      type: 'roomState', roomId: this.id, code: this.code, mode: this.mode, versusFormat: this.versusFormat,
+      isPrivate: this.isPrivate, status: this.status, hostId: this.hostId, players,
+    };
     if (this.countdownEndsAt !== undefined) msg.countdownEndsAt = this.countdownEndsAt;
     const me = playerId ? this.player(playerId) : undefined;
     if (me) msg.resumeToken = me.resumeToken;

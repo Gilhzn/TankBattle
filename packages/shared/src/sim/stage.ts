@@ -59,3 +59,21 @@ export function advanceStageIfReady(state: GameState): void {
     loadStage(state, state.stage + 1);
   }
 }
+
+/**
+ * The side (or sides, on a tie) that won a versus match. Normally exactly one team is still
+ * standing; when the clock runs out on a stalemate it falls back to the highest team score, which
+ * can legitimately tie.
+ */
+export function versusWinningTeams(state: GameState): number[] {
+  const active = state.players.filter((p) => p.active);
+  if (!active.length) return [];
+  const standing = new Set(active.filter((p) => p.lives > 0 || p.tankId !== null).map((p) => p.team));
+  if (standing.size === 1) return [...standing];
+  const scores = new Map<number, number>();
+  for (const p of active) scores.set(p.team, (scores.get(p.team) ?? 0) + p.score);
+  const best = Math.max(...scores.values());
+  // A scoreless stalemate has no winner rather than four of them.
+  if (best <= 0) return [];
+  return [...scores.entries()].filter(([, v]) => v === best).map(([team]) => team);
+}
