@@ -16,6 +16,32 @@ export interface GameStartInfo {
 
 const HEARTBEAT_MS = TICK_MS * 10;
 const PING_MS = 5000;
+const SEAT_KEY = 'tank.seat';
+
+interface SavedSeat {
+  roomId: string;
+  resumeToken: string;
+}
+
+/** The room seat survives a page reload (mobile browsers reload tabs freely) so the player can resume. */
+function loadSeat(): SavedSeat | null {
+  try {
+    const raw = sessionStorage.getItem(SEAT_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<SavedSeat>;
+    return typeof v.roomId === 'string' && typeof v.resumeToken === 'string' ? { roomId: v.roomId, resumeToken: v.resumeToken } : null;
+  } catch {
+    return null;
+  }
+}
+function saveSeat(seat: SavedSeat | null): void {
+  try {
+    if (seat) sessionStorage.setItem(SEAT_KEY, JSON.stringify(seat));
+    else sessionStorage.removeItem(SEAT_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 /**
  * WebSocket client for /ws: hello/welcome, room ops, input + heartbeat, snapshots,
@@ -152,8 +178,9 @@ export class WsClient implements GameTransport {
         const w = this.welcomeWaiters;
         this.welcomeWaiters = [];
         for (const x of w) x.resolve();
-        if (wasReconnect && this.room?.resumeToken) {
-          this.send({ type: 'resume', roomId: this.room.roomId, resumeToken: this.room.resumeToken });
+        const seat = this.room?.resumeToken ? { roomId: this.room.roomId, resumeToken: this.room.resumeToken } : loadSeat();
+        if (seat && (wasReconnect || !this.room)) {
+          this.send({ type: 'resume', roomId: seat.roomId, resumeToken: seat.resumeToken });
         }
         this.meta.emit({ type: 'connection', state: 'connected' });
         break;
@@ -163,6 +190,8 @@ export class WsClient implements GameTransport {
         this.room = { ...msg, resumeToken: msg.resumeToken ?? prevToken };
         const me = msg.players.find((p) => p.id === this.playerId);
         if (me) this.mySlot = me.slot;
+        if (this.room.resumeToken) saveSeat({ roomId: this.room.roomId, resumeToken: this.room.resumeToken });
+        if (msg.status === 'lobby') this.lastGameStart = null;
         break;
       }
       case 'gameStart': {
@@ -176,6 +205,12 @@ export class WsClient implements GameTransport {
       }
       case 'snapshot': {
         const snap = msg.snapshot as Snapshot;
+        if (!this.lastGameStart && snap.full && this.room && this.room.status !== 'lobby' && this.room.status !== 'gameOver') {
+          // resumed into a running match: the server sends roomState + a full snapshot instead of gameStart
+          this.lastGameStart = { seed: 0, stage: snap.stage, snapshot: snap, yourSlot: this.mySlot };
+          this.itemCountsMap = this.loadoutCounts();
+          this.server.emit({ type: 'gameStart', seed: 0, stage: snap.stage, snapshot: snap, yourSlot: this.mySlot });
+        }
         this.snapshots.emit(snap);
         if (snap.events?.length) this.events.emit({ events: snap.events, tick: snap.t });
         break;
@@ -196,11 +231,14 @@ export class WsClient implements GameTransport {
         this.meta.emit({ type: 'rtt', ms: this.rtt });
         break;
       case 'error':
+        if (msg.code === 'bad_resume' || msg.code === 'room_not_found') saveSeat(null);
         this.meta.emit({ type: 'error', code: msg.code, message: msg.message });
         break;
       case 'left':
       case 'kicked':
         this.room = null;
+        this.lastGameStart = null;
+        saveSeat(null);
         break;
     }
     this.server.emit(msg);
@@ -248,6 +286,8 @@ export class WsClient implements GameTransport {
   leaveRoom(): void {
     this.send({ type: 'leaveRoom' });
     this.room = null;
+    this.lastGameStart = null;
+    saveSeat(null);
   }
   setReady(ready: boolean): void {
     this.send({ type: 'setReady', ready });
@@ -312,6 +352,8 @@ export class WsClient implements GameTransport {
     this.ws?.close();
     this.ws = null;
     this.room = null;
+    this.lastGameStart = null;
+    saveSeat(null);
     this.attempt = 0;
     this.setState('closed');
   }
