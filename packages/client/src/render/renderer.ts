@@ -1,0 +1,377 @@
+import {
+  BASE_TILE_X, BASE_TILE_Y, BULLET_SIZE, FIELD, GRID, POWERUP_SIZE, TANK_SIZE, TILE, TankFlag, Tile,
+  type BulletDTO, type PowerUpKind, type TankDTO, type TileId, type ViewState,
+} from '@tank/shared';
+import type { InterpBuffer } from '../game/interp.js';
+import type { Effects } from './effects.js';
+import { COLORS, paletteKey, rgba, tankPalette } from './theme.js';
+import {
+  POWERUP_COLORS, SpriteCache, ctxOf, drawBase, drawBulletSprite, drawGlow, drawPowerUpGlyph, drawTankSprite, drawTile, makeCanvas, roundRect,
+  type AnyCanvas,
+} from './sprites.js';
+
+export interface RenderOptions {
+  mySlot: number;
+  reducedMotion: boolean;
+  powerUpLabel: (kind: PowerUpKind) => string;
+}
+
+const MAX_DPR = 2;
+
+/** Canvas 2D renderer. Logical units are simulation sub-pixels (FIELD = 1664) mapped by `scale`. */
+export class Renderer {
+  private ctx: CanvasRenderingContext2D;
+  private sprites = new SpriteCache();
+  private tileLayer: AnyCanvas | null = null;
+  private treesLayer: AnyCanvas | null = null;
+  private tilesCopy = new Uint8Array(GRID * GRID);
+  private tilesValid = false;
+  private waterTiles: number[] = [];
+  private hasTrees = false;
+  size = 0; // device px (square)
+  scale = 1;
+  dpr = 1;
+
+  constructor(readonly canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('canvas 2d unavailable');
+    this.ctx = ctx;
+  }
+
+  resize(cssSize: number): void {
+    const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+    const size = Math.max(1, Math.round(cssSize * dpr));
+    if (size === this.size && dpr === this.dpr) return;
+    this.dpr = dpr;
+    this.size = size;
+    this.canvas.width = size;
+    this.canvas.height = size;
+    this.canvas.style.width = `${cssSize}px`;
+    this.canvas.style.height = `${cssSize}px`;
+    this.scale = size / FIELD;
+    this.sprites.clear();
+    this.tileLayer = null;
+    this.treesLayer = null;
+    this.tilesValid = false;
+  }
+
+  /** Force the tile layer to rebuild (e.g. after a full snapshot). */
+  invalidateTiles(): void {
+    this.tilesValid = false;
+  }
+
+  private tilesChanged(tiles: Uint8Array): boolean {
+    if (!this.tilesValid) return true;
+    for (let i = 0; i < tiles.length; i++) if (tiles[i] !== this.tilesCopy[i]) return true;
+    return false;
+  }
+
+  private rebuildTiles(tiles: Uint8Array): void {
+    const size = this.size;
+    if (!this.tileLayer) this.tileLayer = makeCanvas(size, size);
+    if (!this.treesLayer) this.treesLayer = makeCanvas(size, size);
+    const g = ctxOf(this.tileLayer);
+    const tctx = ctxOf(this.treesLayer);
+    const ts = TILE * this.scale;
+    // ground
+    g.fillStyle = COLORS.bg;
+    g.fillRect(0, 0, size, size);
+    const vg = g.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size * 0.8);
+    vg.addColorStop(0, 'rgba(20, 28, 52, 0.55)');
+    vg.addColorStop(1, 'rgba(7, 9, 15, 0)');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, size, size);
+    g.strokeStyle = COLORS.grid;
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let i = 0; i <= GRID; i++) {
+      const p = Math.round(i * ts) + 0.5;
+      g.moveTo(p, 0);
+      g.lineTo(p, size);
+      g.moveTo(0, p);
+      g.lineTo(size, p);
+    }
+    g.stroke();
+    g.strokeStyle = 'rgba(94, 225, 255, 0.09)';
+    g.beginPath();
+    for (let i = 0; i <= GRID; i += 2) {
+      const p = Math.round(i * ts) + 0.5;
+      g.moveTo(p, 0);
+      g.lineTo(p, size);
+      g.moveTo(0, p);
+      g.lineTo(size, p);
+    }
+    g.stroke();
+
+    tctx.clearRect(0, 0, size, size);
+    this.waterTiles = [];
+    this.hasTrees = false;
+    for (let ty = 0; ty < GRID; ty++) {
+      for (let tx = 0; tx < GRID; tx++) {
+        const i = ty * GRID + tx;
+        const t = tiles[i] as TileId;
+        const x = tx * ts;
+        const y = ty * ts;
+        if (t === Tile.BASE || t === Tile.BASE_DEAD) {
+          if (tx === BASE_TILE_X && ty === BASE_TILE_Y) drawBase(g, x, y, ts * 2, t === Tile.BASE_DEAD);
+          continue;
+        }
+        if (t === Tile.TREES) {
+          this.hasTrees = true;
+          drawTile(tctx, t, x, y, ts, tx, ty);
+          continue;
+        }
+        if (t === Tile.WATER) this.waterTiles.push(i);
+        drawTile(g, t, x, y, ts, tx, ty);
+      }
+    }
+    this.tilesCopy.set(tiles);
+    this.tilesValid = true;
+  }
+
+  private drawWater(time: number): void {
+    if (!this.waterTiles.length) return;
+    const ctx = this.ctx;
+    const ts = TILE * this.scale;
+    const phase = (time / 900) % 1;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const i of this.waterTiles) {
+      const tx = i % GRID;
+      const ty = (i - tx) / GRID;
+      const x = tx * ts;
+      const y = ty * ts;
+      const off = ((phase + ((tx + ty) % 4) * 0.25) % 1) * ts;
+      ctx.fillStyle = rgba(COLORS.waterLight, 0.22);
+      ctx.fillRect(x, y + off, ts, Math.max(1, ts * 0.12));
+      ctx.fillStyle = rgba(COLORS.waterGlow, 0.1);
+      ctx.fillRect(x, y + ((off + ts * 0.5) % ts), ts, Math.max(1, ts * 0.08));
+    }
+    ctx.restore();
+  }
+
+  private tankSprite(kind: TankDTO[2], owner: number, skin: string, hp: number, maxHp: number, frame: number, tier: number): AnyCanvas {
+    const palette = tankPalette(kind, owner, skin, hp, maxHp);
+    const bodyPx = TANK_SIZE * this.scale;
+    const size = Math.ceil(bodyPx / 0.8);
+    const key = `tank|${paletteKey(palette)}|${frame}|${tier}|${kind === 'player' ? 1 : 0}`;
+    return this.sprites.get(key, size, size, (c, w) => drawTankSprite(c, w, { palette, frame, tier, isPlayer: kind === 'player' }));
+  }
+
+  private drawTanks(view: ViewState, interp: InterpBuffer, rt: number, time: number): void {
+    const ctx = this.ctx;
+    const s = this.scale;
+    const half = (TANK_SIZE * s) / 2;
+    for (const t of view.tanks as TankDTO[]) {
+      const [id, owner, kind, tx, ty, dir, tier, hp, maxHp, flags, skin] = t;
+      const pos = interp.tankPos(id, rt, { x: tx, y: ty });
+      const cx = pos.x * s + half;
+      const cy = pos.y * s + half;
+      const spawning = (flags & TankFlag.SPAWNING) !== 0;
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (spawning) {
+        this.drawSpawnStar(time, half);
+        ctx.restore();
+        continue;
+      }
+      const moving = (flags & TankFlag.MOVING) !== 0;
+      const frame = moving ? Math.floor(time / 90) % 2 : 0;
+      const sprite = this.tankSprite(kind, owner, skin, hp, maxHp, frame, kind === 'player' ? tier : 0);
+      const sw = sprite.width;
+      ctx.save();
+      ctx.rotate((dir * Math.PI) / 2);
+      ctx.drawImage(sprite, -sw / 2, -sw / 2);
+      ctx.restore();
+      if (flags & TankFlag.FROZEN) {
+        ctx.fillStyle = rgba(COLORS.cyan, 0.32);
+        roundRect(ctx, -half, -half, half * 2, half * 2, half * 0.3);
+        ctx.fill();
+      }
+      if (flags & TankFlag.FLASHING) {
+        const a = 0.45 + 0.45 * Math.sin(time / 80);
+        ctx.strokeStyle = `rgba(255,255,255,${a})`;
+        ctx.lineWidth = Math.max(1.5, 3 * s);
+        roundRect(ctx, -half - 2 * s, -half - 2 * s, half * 2 + 4 * s, half * 2 + 4 * s, half * 0.35);
+        ctx.stroke();
+      }
+      if (flags & TankFlag.SHIP) {
+        ctx.strokeStyle = rgba('#7fb2ff', 0.8);
+        ctx.lineWidth = Math.max(1, 2.5 * s);
+        ctx.beginPath();
+        ctx.arc(0, 0, half * 1.05, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (flags & TankFlag.SHIELD) this.drawShield(time, half, kind === 'player' ? COLORS.cyan : COLORS.lime);
+      ctx.restore();
+    }
+  }
+
+  private drawSpawnStar(time: number, half: number): void {
+    const ctx = this.ctx;
+    const size = Math.ceil(half * 2.6);
+    const star = this.sprites.get('spawnstar', size, size, (c, w) => {
+      drawGlow(c, w, COLORS.cyan, 0.5);
+      const cx = w / 2;
+      c.fillStyle = COLORS.white;
+      c.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 === 0 ? w * 0.42 : w * 0.12;
+        const a = (i * Math.PI) / 4;
+        c.lineTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r);
+      }
+      c.closePath();
+      c.fill();
+    });
+    const pulse = 0.75 + 0.25 * Math.sin(time / 70);
+    ctx.save();
+    ctx.rotate(time / 250);
+    ctx.scale(pulse, pulse);
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(star, -size / 2, -size / 2);
+    ctx.restore();
+  }
+
+  private drawShield(time: number, half: number, color: string): void {
+    const ctx = this.ctx;
+    const size = Math.ceil(half * 3);
+    const ring = this.sprites.get(`hex|${color}`, size, size, (c, w) => {
+      const cx = w / 2;
+      const r = w * 0.4;
+      c.strokeStyle = rgba(color, 0.18);
+      c.lineWidth = Math.max(2, w * 0.09);
+      hexPath(c, cx, cx, r);
+      c.stroke();
+      c.strokeStyle = rgba(color, 0.95);
+      c.lineWidth = Math.max(1, w * 0.035);
+      hexPath(c, cx, cx, r);
+      c.stroke();
+    });
+    ctx.save();
+    ctx.rotate(time / 600);
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(time / 120);
+    ctx.drawImage(ring, -size / 2, -size / 2);
+    ctx.restore();
+  }
+
+  private drawBullets(view: ViewState, interp: InterpBuffer, rt: number): void {
+    const ctx = this.ctx;
+    const s = this.scale;
+    const half = (BULLET_SIZE * s) / 2;
+    const size = Math.ceil(BULLET_SIZE * s * 3.2);
+    const playerSprite = this.sprites.get('bullet|p', size, size, (c, w) => drawBulletSprite(c, w, COLORS.bulletPlayer, COLORS.amber));
+    const enemySprite = this.sprites.get('bullet|e', size, size, (c, w) => drawBulletSprite(c, w, COLORS.bulletEnemy, COLORS.magenta));
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of view.bullets as BulletDTO[]) {
+      const [id, bx, by, dir, fromPlayer] = b;
+      const pos = interp.bulletPos(id, rt, { x: bx, y: by });
+      const cx = pos.x * s + half;
+      const cy = pos.y * s + half;
+      const dx = dir === 1 ? -1 : dir === 3 ? 1 : 0;
+      const dy = dir === 2 ? -1 : dir === 0 ? 1 : 0;
+      const len = 60 * s;
+      const grad = ctx.createLinearGradient(cx, cy, cx + dx * len, cy + dy * len);
+      grad.addColorStop(0, rgba(fromPlayer ? COLORS.amber : COLORS.magenta, 0.75));
+      grad.addColorStop(1, rgba(fromPlayer ? COLORS.amber : COLORS.magenta, 0));
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(1.5, half * 1.2);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + dx * len, cy + dy * len);
+      ctx.stroke();
+      ctx.drawImage(fromPlayer ? playerSprite : enemySprite, cx - size / 2, cy - size / 2);
+    }
+    ctx.restore();
+  }
+
+  private drawPowerUp(view: ViewState, time: number, label: (k: PowerUpKind) => string): void {
+    const pu = view.powerUp;
+    if (!pu) return;
+    const ctx = this.ctx;
+    const s = this.scale;
+    const box = POWERUP_SIZE * s;
+    const cx = pu.x * s + box / 2;
+    const cy = pu.y * s + box / 2;
+    const color = POWERUP_COLORS[pu.kind];
+    const glowSize = Math.ceil(box * 2.2);
+    const glow = this.sprites.get(`puglow|${color}`, glowSize, glowSize, (c, w) => drawGlow(c, w, color, 0.5));
+    const glyphSize = Math.ceil(box * 0.78);
+    const glyph = this.sprites.get(`pu|${pu.kind}`, glyphSize, glyphSize, (c, w) => drawPowerUpGlyph(c, pu.kind, w, color));
+    const pulse = 1 + 0.07 * Math.sin(time / 160);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(time / 200);
+    ctx.drawImage(glow, -glowSize / 2, -glowSize / 2);
+    ctx.globalAlpha = 1;
+    ctx.scale(pulse, pulse);
+    roundRect(ctx, -box * 0.46, -box * 0.46, box * 0.92, box * 0.92, box * 0.22);
+    ctx.fillStyle = 'rgba(10, 14, 28, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, box * 0.06);
+    ctx.stroke();
+    ctx.drawImage(glyph, -glyphSize / 2, -glyphSize / 2);
+    ctx.restore();
+    ctx.save();
+    ctx.font = `700 ${Math.max(9, box * 0.36)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    const text = label(pu.kind).toUpperCase();
+    ctx.fillText(text, cx + 1, cy + box * 0.55 + 1);
+    ctx.fillStyle = color;
+    ctx.fillText(text, cx, cy + box * 0.55);
+    ctx.restore();
+  }
+
+  draw(view: ViewState, interp: InterpBuffer, effects: Effects, time: number, opts: RenderOptions): void {
+    if (!this.size) return;
+    const ctx = this.ctx;
+    const size = this.size;
+    if (this.tilesChanged(view.tiles)) this.rebuildTiles(view.tiles);
+    const rt = interp.renderTick(time);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, size, size);
+    const [sx, sy] = opts.reducedMotion ? [0, 0] : effects.shakeOffset();
+    ctx.translate(sx * this.dpr, sy * this.dpr);
+
+    if (this.tileLayer) ctx.drawImage(this.tileLayer, 0, 0);
+    this.drawWater(time);
+    this.drawTanks(view, interp, rt, time);
+    this.drawBullets(view, interp, rt);
+    effects.draw(ctx, this.scale, Math.max(10, TILE * this.scale * 0.7));
+    if (this.hasTrees && this.treesLayer) {
+      ctx.globalAlpha = 0.88;
+      ctx.drawImage(this.treesLayer, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    this.drawPowerUp(view, time, opts.powerUpLabel);
+
+    if (view.effects.freeze > 0) {
+      ctx.fillStyle = rgba(COLORS.cyan, 0.07 + 0.03 * Math.sin(time / 300));
+      ctx.fillRect(-8, -8, size + 16, size + 16);
+    }
+    if (view.effects.playerFreeze > 0) {
+      ctx.fillStyle = rgba(COLORS.magenta, 0.07);
+      ctx.fillRect(-8, -8, size + 16, size + 16);
+    }
+    if (effects.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${effects.flash * 0.6})`;
+      ctx.fillRect(-8, -8, size + 16, size + 16);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+}
+
+function hexPath(c: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  c.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  c.closePath();
+}
