@@ -1,4 +1,8 @@
+import type { AccountService } from './auth/accounts.js';
 import type { UserService } from './auth/users.js';
+import type { FriendsService } from './social/friends.js';
+import type { RankingService } from './social/ranking.js';
+import type { Presence } from './social/presence.js';
 import type { Config } from './config.js';
 import type { Db } from './db/repo.js';
 import type { BattlepassService } from './economy/battlepass.js';
@@ -21,6 +25,10 @@ export interface App {
   clock: Clock;
   db: Db;
   users: UserService;
+  accounts: AccountService;
+  friends: FriendsService;
+  ranking: RankingService;
+  presence: Presence;
   wallet: WalletService;
   inventory: InventoryService;
   store: StoreService;

@@ -12,9 +12,32 @@ export interface UserDTO {
   skin: string;
   createdAt: number;
   settings: Record<string, unknown>;
+  country: string;
 }
 
-export const userDto = (u: UserRow): UserDTO => ({ id: u.id, nickname: u.nickname, skin: u.skin, createdAt: u.createdAt, settings: u.settings });
+export const userDto = (u: UserRow): UserDTO => ({
+  id: u.id, nickname: u.nickname, skin: u.skin, createdAt: u.createdAt, settings: u.settings, country: u.country,
+});
+
+/**
+ * Nicknames people cannot have. They are the handle friend requests are addressed to, so a name
+ * that impersonates the game itself or a moderator would let someone pass themselves off as staff.
+ */
+const RESERVED_NICKNAMES = new Set([
+  'admin', 'administrator', 'moderator', 'mod', 'staff', 'support', 'system', 'server', 'official',
+  'tank1990', 'tankbattle', 'anthropic', 'claude', 'me', 'you', 'null', 'undefined', 'deleted', 'bot',
+]);
+
+export type NicknameProblem = 'taken' | 'reserved';
+
+/** Why a nickname cannot be used, or null when it is free. */
+export function nicknameProblem(db: Db, nickname: string, selfId?: string): NicknameProblem | null {
+  const lc = nickname.trim().toLowerCase();
+  if (RESERVED_NICKNAMES.has(lc)) return 'reserved';
+  const other = db.users.getByNickname(lc);
+  if (other && other.id !== selfId) return 'taken';
+  return null;
+}
 
 const ADJECTIVES = ['Iron', 'Swift', 'Brave', 'Silent', 'Rusty', 'Neon', 'Steel', 'Crimson', 'Frozen', 'Golden', 'Shadow', 'Turbo', 'Wild', 'Lucky', 'Atomic', 'Rogue'];
 const NOUNS = ['Tank', 'Cannon', 'Panzer', 'Turret', 'Viper', 'Falcon', 'Badger', 'Wolf', 'Comet', 'Rhino', 'Hornet', 'Raider', 'Bolt', 'Titan', 'Ranger', 'Ace'];
@@ -39,12 +62,13 @@ export class UserService {
     return this.db.users.get(id);
   }
 
-  /** Returns a free nickname: the wanted one, or with digits appended on collision. */
+  /**
+   * A free nickname derived from `wanted`, with digits appended on collision.
+   * Only ever used for names the game generates: a name the player typed is rejected instead, so
+   * they find out it was taken rather than silently becoming "Rusty Wolf4718".
+   */
   private uniqueNickname(wanted: string, selfId?: string): string {
-    const taken = (n: string) => {
-      const u = this.db.users.getByNickname(n.toLowerCase());
-      return !!u && u.id !== selfId;
-    };
+    const taken = (n: string) => nicknameProblem(this.db, n, selfId) !== null;
     if (!taken(wanted)) return wanted;
     const base = wanted.slice(0, 12);
     for (let i = 0; i < 50; i++) {
@@ -63,7 +87,10 @@ export class UserService {
         return { user: this.db.users.update(existing.id, { lastSeen: now }), isNew: false };
       }
       const nick = this.uniqueNickname(nickname?.trim() || randomNickname());
-      const user: UserRow = { id: newId(), deviceHash: hash, nickname: nick, nicknameLc: nick.toLowerCase(), skin: 'default', settings: {}, createdAt: now, lastSeen: now };
+      const user: UserRow = {
+        id: newId(), deviceHash: hash, nickname: nick, nicknameLc: nick.toLowerCase(), skin: 'default',
+        settings: {}, createdAt: now, lastSeen: now, country: '',
+      };
       this.db.users.insert(user);
       return { user, isNew: true };
     });
@@ -75,12 +102,39 @@ export class UserService {
     if (u && this.clock() - u.lastSeen > 60_000) this.db.users.update(id, { lastSeen: this.clock() });
   }
 
-  /** Nickname change: 409 when taken by someone else. */
+  /**
+   * Changes a nickname the player chose themselves. Unlike a generated one this is never quietly
+   * altered — the nickname is how friends find each other, so the player has to know which one they
+   * actually ended up with.
+   */
   setNickname(id: string, nickname: string): UserRow {
-    const lc = nickname.toLowerCase();
-    const other = this.db.users.getByNickname(lc);
-    if (other && other.id !== id) throw conflict('nickname taken', 'nickname_taken');
-    return this.db.users.update(id, { nickname, nicknameLc: lc });
+    const trimmed = nickname.trim();
+    const problem = nicknameProblem(this.db, trimmed, id);
+    if (problem === 'taken') throw conflict('that nickname is taken', 'nickname_taken');
+    if (problem === 'reserved') throw conflict('that nickname is reserved', 'nickname_reserved');
+    return this.db.users.update(id, { nickname: trimmed, nicknameLc: trimmed.toLowerCase() });
+  }
+
+  /** Whether a nickname is free, for the "check as you type" endpoint. */
+  nicknameAvailable(nickname: string, selfId?: string): { available: boolean; reason?: NicknameProblem } {
+    const problem = nicknameProblem(this.db, nickname, selfId);
+    return problem ? { available: false, reason: problem } : { available: true };
+  }
+
+  /**
+   * A fresh account with no device attached — the starting point for a Google or email sign-in on a
+   * device that has never played. The device hash is a unique placeholder so the column's uniqueness
+   * constraint still holds.
+   */
+  createBlank(country = ''): UserRow {
+    const now = this.clock();
+    const nick = this.uniqueNickname(randomNickname());
+    const user: UserRow = {
+      id: newId(), deviceHash: `account:${newNonce(24)}`, nickname: nick, nicknameLc: nick.toLowerCase(),
+      skin: 'default', settings: {}, createdAt: now, lastSeen: now, country,
+    };
+    this.db.users.insert(user);
+    return user;
   }
 
   setSkin(id: string, skin: string, owned: (sku: string) => boolean): UserRow {

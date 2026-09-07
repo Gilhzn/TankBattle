@@ -10,6 +10,68 @@ export interface UserRow {
   settings: Record<string, unknown>;
   createdAt: number;
   lastSeen: number;
+  /** ISO 3166-1 alpha-2, uppercase. '' until we learn it. Drives the national leaderboard. */
+  country: string;
+}
+
+export type AuthProvider = 'google' | 'email';
+
+/**
+ * A way of signing in to an account. A user may hold several (Google and email both), and each
+ * (provider, subject) pair points at exactly one user, which is what makes sign-in idempotent.
+ */
+export interface IdentityRow {
+  id: string;
+  userId: string;
+  provider: AuthProvider;
+  /** Google's stable `sub`, or the lower-cased email address. */
+  subject: string;
+  email: string;
+  emailVerified: boolean;
+  createdAt: number;
+  lastLoginAt: number;
+}
+
+/** A pending email verification challenge. The code itself is never stored, only its hash. */
+export interface EmailCodeRow {
+  email: string;
+  codeHash: string;
+  /** The account being verified, when the challenge came from a signed-in user upgrading a guest. */
+  userId: string | null;
+  expiresAt: number;
+  attempts: number;
+  createdAt: number;
+}
+
+export type FriendRequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
+
+export interface FriendRequestRow {
+  id: string;
+  fromId: string;
+  toId: string;
+  status: FriendRequestStatus;
+  createdAt: number;
+  respondedAt: number | null;
+}
+
+/** One direction of a friendship. Accepting a request writes both rows. */
+export interface FriendRow {
+  userId: string;
+  friendId: string;
+  createdAt: number;
+}
+
+/** Versus standing. Created lazily on a player's first ranked result. */
+export interface RatingRow {
+  userId: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  /** Highest rating ever reached, for the profile. */
+  best: number;
+  matches: number;
+  updatedAt: number;
 }
 export type LedgerCurrency = 'coins' | 'gems';
 export interface WalletRow {
@@ -120,9 +182,61 @@ export interface UsersRepo {
   get(id: string): UserRow | undefined;
   getByDeviceHash(hash: string): UserRow | undefined;
   getByNickname(nicknameLc: string): UserRow | undefined;
+  /** Bulk fetch for friend lists and leaderboards, in no particular order. */
+  getMany(ids: string[]): UserRow[];
   insert(row: UserRow): void;
   update(id: string, patch: Partial<Omit<UserRow, 'id'>>): UserRow;
   count(): number;
+}
+
+export interface IdentitiesRepo {
+  get(provider: AuthProvider, subject: string): IdentityRow | undefined;
+  listForUser(userId: string): IdentityRow[];
+  insert(row: IdentityRow): void;
+  update(id: string, patch: Partial<Omit<IdentityRow, 'id'>>): IdentityRow;
+}
+
+export interface EmailCodesRepo {
+  get(email: string): EmailCodeRow | undefined;
+  put(row: EmailCodeRow): void;
+  remove(email: string): void;
+  /** Challenges created for this address since `sinceMs`, for rate limiting. */
+  countSince(email: string, sinceMs: number): number;
+}
+
+export interface FriendsRepo {
+  /** Friend ids of `userId`, newest friendship first. */
+  list(userId: string): FriendRow[];
+  has(userId: string, friendId: string): boolean;
+  /** Writes both directions. */
+  link(a: string, b: string, at: number): void;
+  /** Removes both directions. */
+  unlink(a: string, b: string): void;
+  count(userId: string): number;
+}
+
+export interface FriendRequestsRepo {
+  get(id: string): FriendRequestRow | undefined;
+  /** The live (pending) request between two users in that direction, if any. */
+  pendingBetween(fromId: string, toId: string): FriendRequestRow | undefined;
+  /** The most recent request in that direction whatever its status — used for the decline cooldown. */
+  lastBetween(fromId: string, toId: string): FriendRequestRow | undefined;
+  incoming(toId: string): FriendRequestRow[];
+  outgoing(fromId: string): FriendRequestRow[];
+  insert(row: FriendRequestRow): void;
+  update(id: string, patch: Partial<Omit<FriendRequestRow, 'id'>>): FriendRequestRow;
+  countPendingFrom(fromId: string, sinceMs: number): number;
+}
+
+export interface RatingsRepo {
+  get(userId: string): RatingRow | undefined;
+  put(row: RatingRow): void;
+  /** Highest rated players, best first. `country` filters to one nation when given. */
+  top(limit: number, country?: string): Array<RatingRow & { nickname: string; country: string }>;
+  /** How many rated players sit strictly above this rating, globally or within one country. */
+  countAbove(rating: number, country?: string): number;
+  /** Total rated players, globally or within one country. */
+  countRated(country?: string): number;
 }
 export interface WalletsRepo {
   get(userId: string): WalletRow | undefined;
@@ -193,6 +307,11 @@ export interface Db {
   transaction<T>(fn: () => T): T;
   close(): void;
   users: UsersRepo;
+  identities: IdentitiesRepo;
+  emailCodes: EmailCodesRepo;
+  friends: FriendsRepo;
+  friendRequests: FriendRequestsRepo;
+  ratings: RatingsRepo;
   wallets: WalletsRepo;
   ledger: LedgerRepo;
   inventory: InventoryRepo;

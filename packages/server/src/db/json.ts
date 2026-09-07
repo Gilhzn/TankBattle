@@ -4,6 +4,7 @@ import {
   bestPerUserOf, sortGifts, statsOf,
   type AdSessionRow, type BattlepassRow, type DailyRow, type Db, type GiftRow, type InventoryRow, type LedgerRow, type MatchResultRow,
   type OrderRow, type SoloClaimRow, type SoloSessionRow, type UserRow, type WalletRow,
+  type EmailCodeRow, type FriendRequestRow, type FriendRow, type IdentityRow, type RatingRow,
 } from './repo.js';
 
 /** In-memory tables. Persisted as JSON (debounced, atomic) when a file path is given. */
@@ -20,11 +21,17 @@ interface Data {
   matches: MatchResultRow[];
   solo: Map<string, SoloSessionRow>;
   soloClaims: Map<string, SoloClaimRow>; // `${userId}:${day}`
+  identities: Map<string, IdentityRow>; // by identity id
+  emailCodes: Map<string, EmailCodeRow>; // by lower-cased email
+  friends: Map<string, FriendRow>; // `${userId}:${friendId}`, one row per direction
+  friendRequests: Map<string, FriendRequestRow>;
+  ratings: Map<string, RatingRow>; // by userId
 }
 
 const emptyData = (): Data => ({
   users: new Map(), wallets: new Map(), ledger: [], inventory: new Map(), orders: new Map(), gifts: new Map(),
   battlepass: new Map(), daily: new Map(), ads: new Map(), matches: [], solo: new Map(), soloClaims: new Map(),
+  identities: new Map(), emailCodes: new Map(), friends: new Map(), friendRequests: new Map(), ratings: new Map(),
 });
 
 type Serialized = { [K in keyof Data]: Data[K] extends Map<string, infer V> ? [string, V][] : Data[K] };
@@ -115,6 +122,7 @@ export function createJsonDb(filePath: string | null): Db {
       get: (id) => data.users.get(id),
       getByDeviceHash: (h) => [...data.users.values()].find((u) => u.deviceHash === h),
       getByNickname: (lc) => [...data.users.values()].find((u) => u.nicknameLc === lc),
+      getMany: (ids) => ids.map((id) => data.users.get(id)).filter((u): u is UserRow => !!u),
       insert: (row) => {
         if (data.users.has(row.id)) throw new Error('duplicate user id');
         if ([...data.users.values()].some((u) => u.nicknameLc === row.nicknameLc)) throw new Error('duplicate nickname');
@@ -128,6 +136,90 @@ export function createJsonDb(filePath: string | null): Db {
         return r;
       },
       count: () => data.users.size,
+    },
+    identities: {
+      get: (provider, subject) => [...data.identities.values()].find((i) => i.provider === provider && i.subject === subject),
+      listForUser: (userId) => [...data.identities.values()].filter((i) => i.userId === userId).sort((a, b) => a.createdAt - b.createdAt),
+      insert: (row) => {
+        if ([...data.identities.values()].some((i) => i.provider === row.provider && i.subject === row.subject)) {
+          throw new Error('duplicate identity');
+        }
+        data.identities.set(row.id, { ...row });
+        touch();
+      },
+      update: (id, patch) => {
+        const r = patchRow(data.identities, id, patch, 'identity');
+        touch();
+        return r;
+      },
+    },
+    emailCodes: {
+      get: (email) => data.emailCodes.get(email),
+      put: (row) => {
+        data.emailCodes.set(row.email, { ...row });
+        touch();
+      },
+      remove: (email) => {
+        data.emailCodes.delete(email);
+        touch();
+      },
+      // Only the live challenge per address is kept, so "how many since" is 0 or 1. That is enough
+      // for the rate limiter, which only needs to know whether one was issued recently.
+      countSince: (email, since) => {
+        const row = data.emailCodes.get(email);
+        return row && row.createdAt >= since ? 1 : 0;
+      },
+    },
+    friends: {
+      list: (userId) => [...data.friends.values()].filter((f) => f.userId === userId).sort((a, b) => b.createdAt - a.createdAt),
+      has: (a, b) => data.friends.has(`${a}:${b}`),
+      link: (a, b, at) => {
+        data.friends.set(`${a}:${b}`, { userId: a, friendId: b, createdAt: at });
+        data.friends.set(`${b}:${a}`, { userId: b, friendId: a, createdAt: at });
+        touch();
+      },
+      unlink: (a, b) => {
+        data.friends.delete(`${a}:${b}`);
+        data.friends.delete(`${b}:${a}`);
+        touch();
+      },
+      count: (userId) => [...data.friends.values()].filter((f) => f.userId === userId).length,
+    },
+    friendRequests: {
+      get: (id) => data.friendRequests.get(id),
+      pendingBetween: (from, to) => [...data.friendRequests.values()].find((r) => r.fromId === from && r.toId === to && r.status === 'pending'),
+      lastBetween: (from, to) =>
+        [...data.friendRequests.values()].filter((r) => r.fromId === from && r.toId === to).sort((a, b) => b.createdAt - a.createdAt)[0],
+      incoming: (to) => [...data.friendRequests.values()].filter((r) => r.toId === to && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt),
+      outgoing: (from) => [...data.friendRequests.values()].filter((r) => r.fromId === from && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt),
+      insert: (row) => {
+        if (data.friendRequests.has(row.id)) throw new Error('duplicate friend request id');
+        data.friendRequests.set(row.id, { ...row });
+        touch();
+      },
+      update: (id, patch) => {
+        const r = patchRow(data.friendRequests, id, patch, 'friend request');
+        touch();
+        return r;
+      },
+      countPendingFrom: (from, since) => [...data.friendRequests.values()].filter((r) => r.fromId === from && r.createdAt >= since).length,
+    },
+    ratings: {
+      get: (userId) => data.ratings.get(userId),
+      put: (row) => {
+        data.ratings.set(row.userId, { ...row });
+        touch();
+      },
+      top: (limit, country) =>
+        [...data.ratings.values()]
+          .map((r) => ({ ...r, user: data.users.get(r.userId) }))
+          .filter((r) => !!r.user && (!country || r.user.country === country))
+          .sort((a, b) => b.rating - a.rating || a.updatedAt - b.updatedAt)
+          .slice(0, limit)
+          .map(({ user, ...r }) => ({ ...r, nickname: user!.nickname, country: user!.country })),
+      countAbove: (rating, country) =>
+        [...data.ratings.values()].filter((r) => r.rating > rating && (!country || data.users.get(r.userId)?.country === country)).length,
+      countRated: (country) => [...data.ratings.values()].filter((r) => !country || data.users.get(r.userId)?.country === country).length,
     },
     wallets: {
       get: (userId) => data.wallets.get(userId),

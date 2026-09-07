@@ -5,6 +5,7 @@ import {
   bestPerUserOf, statsOf,
   type AdSessionRow, type BattlepassRow, type DailyRow, type Db, type GiftRow, type InventoryRow, type LedgerRow, type MatchResultRow,
   type OrderRow, type SoloClaimRow, type SoloSessionRow, type UserRow, type WalletRow,
+  type AuthProvider, type EmailCodeRow, type FriendRequestRow, type FriendRow, type IdentityRow, type RatingRow,
 } from './repo.js';
 
 type SqliteCtor = typeof BetterSqlite3;
@@ -13,7 +14,8 @@ type Row = Record<string, unknown>;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, device_hash TEXT NOT NULL UNIQUE, nickname TEXT NOT NULL, nickname_lc TEXT NOT NULL UNIQUE,
-  skin TEXT NOT NULL DEFAULT 'default', settings TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL);
+  skin TEXT NOT NULL DEFAULT 'default', settings TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL,
+  country TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS wallets (user_id TEXT PRIMARY KEY, coins INTEGER NOT NULL DEFAULT 0, gems INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS ledger (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL, currency TEXT NOT NULL, amount INTEGER NOT NULL, balance_after INTEGER NOT NULL,
@@ -46,17 +48,49 @@ CREATE TABLE IF NOT EXISTS solo_sessions (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL, seed INTEGER NOT NULL, stage INTEGER NOT NULL, boosts TEXT NOT NULL DEFAULT '[]',
   difficulty TEXT NOT NULL DEFAULT 'normal', created_at INTEGER NOT NULL, consumed_at INTEGER);
 CREATE TABLE IF NOT EXISTS solo_claims (user_id TEXT NOT NULL, day INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, day));
+CREATE TABLE IF NOT EXISTS identities (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, provider TEXT NOT NULL, subject TEXT NOT NULL, email TEXT NOT NULL DEFAULT '',
+  email_verified INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, last_login_at INTEGER NOT NULL,
+  UNIQUE(provider, subject));
+CREATE INDEX IF NOT EXISTS identities_user ON identities(user_id);
+CREATE TABLE IF NOT EXISTS email_codes (
+  email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, user_id TEXT, expires_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS friends (
+  user_id TEXT NOT NULL, friend_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(user_id, friend_id));
+CREATE INDEX IF NOT EXISTS friends_user ON friends(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id TEXT PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, status TEXT NOT NULL,
+  created_at INTEGER NOT NULL, responded_at INTEGER);
+CREATE INDEX IF NOT EXISTS freq_to ON friend_requests(to_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS freq_from ON friend_requests(from_id, status, created_at DESC);
+CREATE TABLE IF NOT EXISTS ratings (
+  user_id TEXT PRIMARY KEY, rating INTEGER NOT NULL, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,
+  draws INTEGER NOT NULL DEFAULT 0, best INTEGER NOT NULL, matches INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS ratings_rank ON ratings(rating DESC);
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 `;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /** Applies idempotent migrations. New versions append statements guarded by the stored version. */
 function migrate(db: BetterSqlite3.Database): void {
   db.exec(SCHEMA);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
+  const from = row?.version ?? 0;
+  // v2 adds accounts, friends and ratings. The new tables come from SCHEMA above; only columns
+  // added to an existing table need an explicit ALTER, and it has to tolerate a fresh database
+  // where SCHEMA already created the column.
+  if (from < 2) addColumn(db, 'users', 'country', "TEXT NOT NULL DEFAULT ''");
   if (!row) db.prepare('INSERT INTO schema_version(version) VALUES (?)').run(SCHEMA_VERSION);
   else if (row.version < SCHEMA_VERSION) db.prepare('UPDATE schema_version SET version = ?').run(SCHEMA_VERSION);
+}
+
+/** Adds a column unless it is already there, so migrations are safe to re-run. */
+function addColumn(db: BetterSqlite3.Database, table: string, column: string, decl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
 }
 
 const str = (v: unknown) => v as string;
@@ -74,6 +108,27 @@ const json = <T>(v: unknown, dflt: T): T => {
 const toUser = (r: Row): UserRow => ({
   id: str(r.id), deviceHash: str(r.device_hash), nickname: str(r.nickname), nicknameLc: str(r.nickname_lc), skin: str(r.skin),
   settings: json<Record<string, unknown>>(r.settings, {}), createdAt: num(r.created_at), lastSeen: num(r.last_seen),
+  country: (r.country as string | null) ?? '',
+});
+const toIdentity = (r: Row): IdentityRow => ({
+  id: str(r.id), userId: str(r.user_id), provider: r.provider as IdentityRow['provider'], subject: str(r.subject),
+  email: str(r.email), emailVerified: bool(r.email_verified), createdAt: num(r.created_at), lastLoginAt: num(r.last_login_at),
+});
+const toEmailCode = (r: Row): EmailCodeRow => ({
+  email: str(r.email), codeHash: str(r.code_hash), userId: (r.user_id as string | null) ?? null,
+  expiresAt: num(r.expires_at), attempts: num(r.attempts), createdAt: num(r.created_at),
+});
+const toFriend = (r: Row): FriendRow => ({ userId: str(r.user_id), friendId: str(r.friend_id), createdAt: num(r.created_at) });
+const toFriendReq = (r: Row): FriendRequestRow => ({
+  id: str(r.id), fromId: str(r.from_id), toId: str(r.to_id), status: r.status as FriendRequestRow['status'],
+  createdAt: num(r.created_at), respondedAt: nnum(r.responded_at),
+});
+const toRating = (r: Row): RatingRow => ({
+  userId: str(r.user_id), rating: num(r.rating), wins: num(r.wins), losses: num(r.losses), draws: num(r.draws),
+  best: num(r.best), matches: num(r.matches), updatedAt: num(r.updated_at),
+});
+const toRatingRanked = (r: Row): RatingRow & { nickname: string; country: string } => ({
+  ...toRating(r), nickname: str(r.nickname), country: (r.country as string | null) ?? '',
 });
 const toWallet = (r: Row): WalletRow => ({ userId: str(r.user_id), coins: num(r.coins), gems: num(r.gems) });
 const toLedger = (r: Row): LedgerRow => ({
@@ -141,9 +196,53 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
     userGet: one('SELECT * FROM users WHERE id = ?', toUser),
     userByHash: one('SELECT * FROM users WHERE device_hash = ?', toUser),
     userByNick: one('SELECT * FROM users WHERE nickname_lc = ?', toUser),
-    userInsert: run('INSERT INTO users(id, device_hash, nickname, nickname_lc, skin, settings, created_at, last_seen) VALUES (?,?,?,?,?,?,?,?)'),
-    userUpdate: run('UPDATE users SET device_hash=?, nickname=?, nickname_lc=?, skin=?, settings=?, created_at=?, last_seen=? WHERE id=?'),
+    userInsert: run('INSERT INTO users(id, device_hash, nickname, nickname_lc, skin, settings, created_at, last_seen, country) VALUES (?,?,?,?,?,?,?,?,?)'),
+    userUpdate: run('UPDATE users SET device_hash=?, nickname=?, nickname_lc=?, skin=?, settings=?, created_at=?, last_seen=?, country=? WHERE id=?'),
     userCount: countOf('SELECT COUNT(*) AS n FROM users'),
+    identityGet: one('SELECT * FROM identities WHERE provider = ? AND subject = ?', toIdentity),
+    identityById: one('SELECT * FROM identities WHERE id = ?', toIdentity),
+    identityForUser: many('SELECT * FROM identities WHERE user_id = ? ORDER BY created_at', toIdentity),
+    identityInsert: run('INSERT INTO identities(id, user_id, provider, subject, email, email_verified, created_at, last_login_at) VALUES (?,?,?,?,?,?,?,?)'),
+    identityUpdate: run('UPDATE identities SET user_id=?, provider=?, subject=?, email=?, email_verified=?, created_at=?, last_login_at=? WHERE id=?'),
+    codeGet: one('SELECT * FROM email_codes WHERE email = ?', toEmailCode),
+    codePut: run(
+      'INSERT INTO email_codes(email, code_hash, user_id, expires_at, attempts, created_at) VALUES (?,?,?,?,?,?) ' +
+        'ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash, user_id=excluded.user_id, expires_at=excluded.expires_at, ' +
+        'attempts=excluded.attempts, created_at=excluded.created_at',
+    ),
+    codeRemove: run('DELETE FROM email_codes WHERE email = ?'),
+    codeCountSince: countOf('SELECT COUNT(*) AS n FROM email_codes WHERE email = ? AND created_at >= ?'),
+    friendList: many('SELECT * FROM friends WHERE user_id = ? ORDER BY created_at DESC', toFriend),
+    friendHas: countOf('SELECT COUNT(*) AS n FROM friends WHERE user_id = ? AND friend_id = ?'),
+    friendPut: run('INSERT INTO friends(user_id, friend_id, created_at) VALUES (?,?,?) ON CONFLICT(user_id, friend_id) DO NOTHING'),
+    friendDel: run('DELETE FROM friends WHERE user_id = ? AND friend_id = ?'),
+    friendCount: countOf('SELECT COUNT(*) AS n FROM friends WHERE user_id = ?'),
+    freqGet: one('SELECT * FROM friend_requests WHERE id = ?', toFriendReq),
+    freqPending: one("SELECT * FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", toFriendReq),
+    freqLast: one('SELECT * FROM friend_requests WHERE from_id = ? AND to_id = ? ORDER BY created_at DESC LIMIT 1', toFriendReq),
+    freqIncoming: many("SELECT * FROM friend_requests WHERE to_id = ? AND status = 'pending' ORDER BY created_at DESC", toFriendReq),
+    freqOutgoing: many("SELECT * FROM friend_requests WHERE from_id = ? AND status = 'pending' ORDER BY created_at DESC", toFriendReq),
+    freqInsert: run('INSERT INTO friend_requests(id, from_id, to_id, status, created_at, responded_at) VALUES (?,?,?,?,?,?)'),
+    freqUpdate: run('UPDATE friend_requests SET from_id=?, to_id=?, status=?, created_at=?, responded_at=? WHERE id=?'),
+    freqCountFrom: countOf('SELECT COUNT(*) AS n FROM friend_requests WHERE from_id = ? AND created_at >= ?'),
+    ratingGet: one('SELECT * FROM ratings WHERE user_id = ?', toRating),
+    ratingPut: run(
+      'INSERT INTO ratings(user_id, rating, wins, losses, draws, best, matches, updated_at) VALUES (?,?,?,?,?,?,?,?) ' +
+        'ON CONFLICT(user_id) DO UPDATE SET rating=excluded.rating, wins=excluded.wins, losses=excluded.losses, draws=excluded.draws, ' +
+        'best=excluded.best, matches=excluded.matches, updated_at=excluded.updated_at',
+    ),
+    ratingTop: many(
+      'SELECT r.*, u.nickname, u.country FROM ratings r JOIN users u ON u.id = r.user_id ORDER BY r.rating DESC, r.updated_at ASC LIMIT ?',
+      toRatingRanked,
+    ),
+    ratingTopCountry: many(
+      'SELECT r.*, u.nickname, u.country FROM ratings r JOIN users u ON u.id = r.user_id WHERE u.country = ? ORDER BY r.rating DESC, r.updated_at ASC LIMIT ?',
+      toRatingRanked,
+    ),
+    ratingAbove: countOf('SELECT COUNT(*) AS n FROM ratings WHERE rating > ?'),
+    ratingAboveCountry: countOf('SELECT COUNT(*) AS n FROM ratings r JOIN users u ON u.id = r.user_id WHERE r.rating > ? AND u.country = ?'),
+    ratingTotal: countOf('SELECT COUNT(*) AS n FROM ratings'),
+    ratingTotalCountry: countOf('SELECT COUNT(*) AS n FROM ratings r JOIN users u ON u.id = r.user_id WHERE u.country = ?'),
     walletGet: one('SELECT * FROM wallets WHERE user_id = ?', toWallet),
     walletPut: run('INSERT INTO wallets(user_id, coins, gems) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET coins=excluded.coins, gems=excluded.gems'),
     ledgerInsert: run('INSERT INTO ledger(id, user_id, currency, amount, balance_after, reason, ref, created_at) VALUES (?,?,?,?,?,?,?,?)'),
@@ -197,13 +296,64 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
       get: q.userGet,
       getByDeviceHash: q.userByHash,
       getByNickname: q.userByNick,
-      insert: (u) => void q.userInsert(u.id, u.deviceHash, u.nickname, u.nicknameLc, u.skin, JSON.stringify(u.settings), u.createdAt, u.lastSeen),
+      getMany: (ids) => ids.map((id) => q.userGet(id)).filter((u): u is UserRow => !!u),
+      insert: (u) => void q.userInsert(u.id, u.deviceHash, u.nickname, u.nicknameLc, u.skin, JSON.stringify(u.settings), u.createdAt, u.lastSeen, u.country ?? ''),
       update: (id, patch) => {
         const u = { ...need(q.userGet(id), 'user', id), ...patch };
-        q.userUpdate(u.deviceHash, u.nickname, u.nicknameLc, u.skin, JSON.stringify(u.settings), u.createdAt, u.lastSeen, id);
+        q.userUpdate(u.deviceHash, u.nickname, u.nicknameLc, u.skin, JSON.stringify(u.settings), u.createdAt, u.lastSeen, u.country ?? '', id);
         return u;
       },
       count: () => q.userCount(),
+    },
+    identities: {
+      get: (provider, subject) => q.identityGet(provider, subject),
+      listForUser: q.identityForUser,
+      insert: (r) => void q.identityInsert(r.id, r.userId, r.provider, r.subject, r.email, r.emailVerified ? 1 : 0, r.createdAt, r.lastLoginAt),
+      update: (id, patch) => {
+        const r = { ...need(q.identityById(id), 'identity', id), ...patch };
+        q.identityUpdate(r.userId, r.provider, r.subject, r.email, r.emailVerified ? 1 : 0, r.createdAt, r.lastLoginAt, id);
+        return r;
+      },
+    },
+    emailCodes: {
+      get: q.codeGet,
+      put: (r) => void q.codePut(r.email, r.codeHash, r.userId, r.expiresAt, r.attempts, r.createdAt),
+      remove: (email) => void q.codeRemove(email),
+      countSince: (email, since) => q.codeCountSince(email, since),
+    },
+    friends: {
+      list: q.friendList,
+      has: (a, b) => q.friendHas(a, b) > 0,
+      link: (a, b, at) => {
+        q.friendPut(a, b, at);
+        q.friendPut(b, a, at);
+      },
+      unlink: (a, b) => {
+        q.friendDel(a, b);
+        q.friendDel(b, a);
+      },
+      count: (userId) => q.friendCount(userId),
+    },
+    friendRequests: {
+      get: q.freqGet,
+      pendingBetween: (from, to) => q.freqPending(from, to),
+      lastBetween: (from, to) => q.freqLast(from, to),
+      incoming: q.freqIncoming,
+      outgoing: q.freqOutgoing,
+      insert: (r) => void q.freqInsert(r.id, r.fromId, r.toId, r.status, r.createdAt, r.respondedAt),
+      update: (id, patch) => {
+        const r = { ...need(q.freqGet(id), 'friend request', id), ...patch };
+        q.freqUpdate(r.fromId, r.toId, r.status, r.createdAt, r.respondedAt, id);
+        return r;
+      },
+      countPendingFrom: (from, since) => q.freqCountFrom(from, since),
+    },
+    ratings: {
+      get: q.ratingGet,
+      put: (r) => void q.ratingPut(r.userId, r.rating, r.wins, r.losses, r.draws, r.best, r.matches, r.updatedAt),
+      top: (limit, country) => (country ? q.ratingTopCountry(country, limit) : q.ratingTop(limit)),
+      countAbove: (rating, country) => (country ? q.ratingAboveCountry(rating, country) : q.ratingAbove(rating)),
+      countRated: (country) => (country ? q.ratingTotalCountry(country) : q.ratingTotal()),
     },
     wallets: { get: q.walletGet, put: (w) => void q.walletPut(w.userId, w.coins, w.gems) },
     ledger: {

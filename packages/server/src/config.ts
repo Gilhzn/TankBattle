@@ -17,6 +17,12 @@ export interface Config {
   logLevel: LogLevel;
   /** Lobby countdown before `gameStart` (ms). */
   countdownMs: number;
+  /** Google OAuth client id. Google sign-in is offered only when this is set. */
+  googleClientId: string | null;
+  /** Transactional email, for verification codes. Without it codes only reach the server log. */
+  mail: { provider: string | null; apiKey: string | null; from: string | null; endpoint: string | null };
+  /** How long a player may sit in the ranked queue before the game finds them an opponent (ms). */
+  matchmakingTimeoutMs: number;
 }
 
 const int = (v: string | undefined, dflt: number): number => {
@@ -44,5 +50,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     staticDir: env.STATIC_DIR === '' ? null : (env.STATIC_DIR ?? null),
     logLevel: (env.LOG_LEVEL as LogLevel) || 'info',
     countdownMs: int(env.COUNTDOWN_MS, 3000),
+    googleClientId: env.GOOGLE_CLIENT_ID || null,
+    mail: {
+      provider: env.MAIL_PROVIDER || null,
+      apiKey: env.MAIL_API_KEY || null,
+      from: env.MAIL_FROM || null,
+      endpoint: env.MAIL_ENDPOINT || null,
+    },
+    matchmakingTimeoutMs: int(env.MATCHMAKING_TIMEOUT_MS, 20_000),
   };
 }

@@ -16,7 +16,7 @@ const sqlite = loadSqlite();
 const stores: Array<[string, () => Db]> = [['json', () => createJsonDb(null)]];
 if (sqlite) stores.push(['sqlite', () => createSqliteDb(sqlite, ':memory:')]);
 
-const user = (id: string, nick: string): UserRow => ({ id, deviceHash: `h-${id}`, nickname: nick, nicknameLc: nick.toLowerCase(), skin: 'default', settings: {}, createdAt: 1, lastSeen: 1 });
+const user = (id: string, nick: string): UserRow => ({ id, deviceHash: `h-${id}`, nickname: nick, nicknameLc: nick.toLowerCase(), skin: 'default', settings: {}, createdAt: 1, lastSeen: 1, country: 'IL' });
 
 describe.each(stores)('repository (%s)', (_name, open) => {
   function setup() {

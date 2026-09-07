@@ -5,6 +5,13 @@ import type { AddressInfo } from 'node:net';
 import type { App } from './app.js';
 import { verify } from './auth/tokens.js';
 import { UserService } from './auth/users.js';
+import { AccountService } from './auth/accounts.js';
+import { GoogleVerifier } from './auth/google.js';
+import { createMailer, type Mailer } from './auth/mailer.js';
+import type { MxLookup } from './auth/email.js';
+import { FriendsService } from './social/friends.js';
+import { Presence } from './social/presence.js';
+import { RankingService } from './social/ranking.js';
 import { loadConfig, type Config } from './config.js';
 import { openDb } from './db/index.js';
 import type { LedgerCurrency, UserRow } from './db/repo.js';
@@ -44,6 +51,10 @@ export interface StartOptions {
   logLevel?: LogLevel;
   /** Injectable clock for time-dependent economy rules. */
   clock?: Clock;
+  /** Injectable mailer so tests can read verification codes without sending email. */
+  mailer?: Mailer;
+  /** Injectable MX lookup so tests do not depend on DNS. */
+  mx?: MxLookup;
   /** Exposes `debug` helpers (tests only). */
   debug?: boolean;
   config?: Partial<Config>;
@@ -90,6 +101,16 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   log.info(`database: ${db.kind} (${config.dbPath})`);
 
   const users = new UserService(db, config.secret, clock);
+  const presence = new Presence(clock);
+  const mailer = opts.mailer ?? createMailer(
+    { provider: config.mail.provider ?? undefined, apiKey: config.mail.apiKey ?? undefined, from: config.mail.from ?? undefined, endpoint: config.mail.endpoint ?? undefined },
+    log.child('mail'),
+  );
+  const google = config.googleClientId ? new GoogleVerifier({ clientId: config.googleClientId, now: clock }) : undefined;
+  if (!google) log.warn('GOOGLE_CLIENT_ID is not set: sign in with Google is unavailable');
+  const accounts = new AccountService({ db, users, secret: config.secret, clock, log: log.child('auth'), mailer, google, mx: opts.mx });
+  const ranking = new RankingService({ db, clock });
+  const friends = new FriendsService({ db, clock, presence, secret: config.secret, publicUrl: config.publicUrl });
   const wallet = new WalletService(db, clock);
   const inventory = new InventoryService(db);
   const battlepass = new BattlepassService(db, wallet, inventory, clock);
@@ -113,7 +134,10 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       new GameRunner(room, { inventory, wallet, results, log: log.child('game'), tickRate: config.tickRate, snapshotEvery: config.snapshotEvery, fullSnapshotEvery: config.fullSnapshotEvery }),
   });
 
-  const app: App = { config, log, clock, db, users, wallet, inventory, store, battlepass, rewards, gifts, results, solo, provider, rooms, startedAt: Date.now() };
+  const app: App = {
+    config, log, clock, db, users, accounts, friends, ranking, presence,
+    wallet, inventory, store, battlepass, rewards, gifts, results, solo, provider, rooms, startedAt: Date.now(),
+  };
 
   const authenticate = (token: string): UserRow | null => {
     const payload = verify(config.secret, token, clock());
