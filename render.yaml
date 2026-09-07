@@ -10,7 +10,9 @@ services:
     runtime: node
     plan: free
     healthCheckPath: /api/health
-    buildCommand: npm ci && npm run build -w @tank/shared && npm run build -w @tank/server && npm run build -w @tank/client
+    # --include=dev is required: NODE_ENV=production below applies to the build too, and npm then
+    # skips devDependencies — which is where typescript and vite live, so the build would fail.
+    buildCommand: npm ci --include=dev && npm run build -w @tank/shared && npm run build -w @tank/server && npm run build -w @tank/client
     startCommand: node packages/server/dist/index.js
     envVars:
       - key: NODE_VERSION
