@@ -10,6 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w @tank/shared && npm run build -w @tank/server && npm run build -w @tank/client",
     "start": "node packages/server/dist/index.js",
+    "build:demo": "npm run build -w @tank/shared && npm run build -w @tank/client && node scripts/inline-dist.mjs",
     "typecheck": "tsc -b packages/shared packages/server packages/client",
     "test": "vitest run",
     "test:watch": "vitest",
