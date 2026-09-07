@@ -1,6 +1,6 @@
 import { GRID } from './constants.js';
 import { decodeTiles, encodeTiles } from './grid.js';
-import type { Dir, GameMode, GameState, GameStatus, PowerUpKind, TankKind, TickEvent } from './types.js';
+import type { Dir, GameMode, GameState, GameStatus, PowerUpKind, TankKind, TickEvent, VersusFormat } from './types.js';
 
 export const TankFlag = { MOVING: 1, SHIELD: 2, SPAWNING: 4, SHIP: 8, FLASHING: 16, FROZEN: 32 } as const;
 
@@ -22,6 +22,8 @@ export interface PlayerDTO {
   tier: number;
   skin: string;
   respawnIn: number;
+  /** Side in versus (own slot in free-for-all, 0/1 in 2v2); -1 in co-op. */
+  team: number;
 }
 
 export interface Snapshot {
@@ -41,7 +43,8 @@ export interface Snapshot {
   effects: { freeze: number; playerFreeze: number; shovel: number };
   baseAlive: boolean;
   timeLeft: number;
-  gameOverReason: 'base' | 'lives' | 'time' | null;
+  versusFormat: VersusFormat;
+  gameOverReason: 'base' | 'lives' | 'time' | 'eliminated' | null;
   events: TickEvent[];
 }
 
@@ -93,6 +96,7 @@ export function encodeSnapshot(state: GameState, full: boolean, stageName?: stri
       tier: p.tier,
       skin: p.skin,
       respawnIn: p.respawnAt > state.tick ? p.respawnAt - state.tick : 0,
+      team: p.team,
     })),
     enemies: {
       remaining: state.enemies.queue.length,
@@ -107,6 +111,7 @@ export function encodeSnapshot(state: GameState, full: boolean, stageName?: stri
     },
     baseAlive: state.baseAlive,
     timeLeft: state.timeLeft,
+    versusFormat: state.versusFormat,
     gameOverReason: state.gameOverReason,
     events: state.events,
   };
@@ -140,6 +145,7 @@ export function createViewState(): ViewState {
     effects: { freeze: 0, playerFreeze: 0, shovel: 0 },
     baseAlive: true,
     timeLeft: 0,
+    versusFormat: 'ffa',
     gameOverReason: null,
     events: [],
   };

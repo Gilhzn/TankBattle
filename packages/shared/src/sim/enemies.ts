@@ -54,6 +54,7 @@ export function spawnEnemies(state: GameState): void {
     cooldown: 0,
     slide: 0,
     ai: { timer: 0, blocked: 0 },
+    team: -1,
     skin: 'enemy',
   };
   state.tanks.push(tank);

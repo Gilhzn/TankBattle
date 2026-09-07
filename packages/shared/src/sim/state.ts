@@ -1,12 +1,12 @@
 import {
-  DIFFICULTY, ENEMIES_PER_STAGE, GRID, MAX_ENEMIES_ON_SCREEN, STARTING_LIVES, TILE, VERSUS_DURATION_TICKS,
+  DIFFICULTY, ENEMIES_PER_STAGE, GRID, MAX_ENEMIES_ON_SCREEN, STARTING_LIVES, TILE, VERSUS_DURATION_TICKS, VERSUS_LIVES,
 } from '../constants.js';
 import { Rng, hashString } from '../rng.js';
 import { getStageDef, expandRoster } from '../maps/generator.js';
 import { VERSUS_ARENA } from '../maps/stages.js';
 import { parseCells } from '../maps/format.js';
 import type { DifficultyTuning } from '../constants.js';
-import type { Difficulty, GameMode, GameState, PlayerSlot, StageDef } from '../types.js';
+import type { Difficulty, GameMode, GameState, PlayerSlot, StageDef, VersusFormat } from '../types.js';
 import { spawnPlayerTank } from './players.js';
 
 export interface PlayerInit {
@@ -17,7 +17,23 @@ export interface PlayerInit {
   tier?: number;
 }
 
-export function createInitialState(seed: number, stage: number, players: PlayerInit[], mode: GameMode = 'coop', difficulty: Difficulty = 'normal'): GameState {
+/**
+ * Which side a seat fights for. Co-op has no sides; free-for-all makes every seat its own side;
+ * 2v2 pairs the seats across the arena (0+2 against 1+3) so teammates never start side by side.
+ */
+export function teamOf(slot: number, mode: GameMode, format: VersusFormat): number {
+  if (mode !== 'versus') return -1;
+  return format === 'teams' ? slot % 2 : slot;
+}
+
+export function createInitialState(
+  seed: number,
+  stage: number,
+  players: PlayerInit[],
+  mode: GameMode = 'coop',
+  difficulty: Difficulty = 'normal',
+  versusFormat: VersusFormat = 'ffa',
+): GameState {
   const tuning = DIFFICULTY[difficulty] ?? DIFFICULTY.normal;
   const state: GameState = {
     tick: 0,
@@ -36,13 +52,14 @@ export function createInitialState(seed: number, stage: number, players: PlayerI
       name: p.name,
       active: true,
       tankId: null,
-      lives: p.lives ?? tuning.lives,
+      lives: p.lives ?? (mode === 'versus' ? VERSUS_LIVES : tuning.lives),
       score: 0,
       kills: 0,
       deaths: 0,
       tier: p.tier ?? 0,
       respawnAt: 0,
       skin: p.skin ?? 'default',
+      team: teamOf(i, mode, versusFormat),
       usedItems: {},
     })),
     enemies: { queue: [], total: 0, spawned: 0, killed: 0, nextSpawnTick: 0, spawnIndex: 0, maxOnScreen: MAX_ENEMIES_ON_SCREEN },
@@ -55,6 +72,7 @@ export function createInitialState(seed: number, stage: number, players: PlayerI
     events: [],
     gameOverReason: null,
     timeLeft: mode === 'versus' ? VERSUS_DURATION_TICKS : 0,
+    versusFormat: mode === 'versus' ? versusFormat : 'ffa',
   };
   loadStage(state, stage);
   return state;
@@ -96,7 +114,7 @@ export function loadStage(state: GameState, stage: number): void {
   for (const p of state.players) {
     p.tankId = null;
     p.respawnAt = 0;
-    if (p.active && (p.lives > 0 || state.mode === 'versus')) spawnPlayerTank(state, p);
+    if (p.active && p.lives > 0) spawnPlayerTank(state, p);
   }
   state.events.push({ type: 'stageStart', stage });
   void ENEMIES_PER_STAGE;

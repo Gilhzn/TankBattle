@@ -249,6 +249,17 @@ export class GameView {
       case 'score':
         fx.popup(ev.x, ev.y, `+${ev.amount}`);
         break;
+      case 'extraLife':
+        // An extra life is the one pickup with nothing to show on the tank itself, so it says so
+        // out loud and flashes the life counter it actually changed.
+        if (ev.converted) {
+          fx.popup(ev.x, ev.y - TILE, t('game.livesFull'), COLORS.amber);
+        } else {
+          fx.popup(ev.x, ev.y - TILE, `+1 ♥`, COLORS.magenta);
+          if (ev.slot === this.opts.transport.mySlot) this.banner(t('game.extraLife'), t('game.livesNow', { n: ev.lives }), 'success', 1600);
+          this.hud.pulseLives(ev.slot);
+        }
+        break;
       case 'baseDestroyed':
         fx.explosion((BASE_TILE_X + 1) * TILE, (BASE_TILE_Y + 1) * TILE, true);
         this.banner(t('game.baseDestroyed'), '', 'danger', 2500);

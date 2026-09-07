@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { makeState, run, NONE, p0Tank, clearEnemies, fillTiles } from './helpers.js';
-import { Tile, type PowerUpKind, type Tank } from '../types.js';
-import { CLOCK_TICKS, HELMET_TICKS, SHOVEL_TICKS, TILE, SHOVEL_FLASH_TICKS } from '../constants.js';
+import { Tile, VERSUS_POWERUP_KINDS, type PowerUpKind, type Tank } from '../types.js';
+import { CLOCK_TICKS, EXTRA_LIFE_BONUS_SCORE, HELMET_TICKS, MAX_LIVES, POWERUP_SCORE, SHOVEL_TICKS, TILE, SHOVEL_FLASH_TICKS } from '../constants.js';
 import { baseRingTiles, getTile } from '../grid.js';
+import { step } from '../sim/step.js';
+import { dropPowerUp } from '../sim/powerups.js';
 
 function give(s: ReturnType<typeof makeState>, kind: PowerUpKind, tank: Tank) {
   s.powerUp = { kind, x: tank.x, y: tank.y, spawnedTick: s.tick };
@@ -91,5 +93,77 @@ describe('power-ups', () => {
     s.powerUp = { kind: 'star', x: 0, y: 0, spawnedTick: s.tick };
     run(s, 30 * 30 + 2, [NONE]);
     expect(s.powerUp).toBeNull();
+  });
+});
+
+describe('the extra life announces itself', () => {
+  const setup = () => {
+    const s = makeState(21);
+    clearEnemies(s);
+    fillTiles(s, (tx, ty) => (ty < 22 ? Tile.EMPTY : undefined));
+    return s;
+  };
+
+  it('raises lives and emits an extraLife event carrying the new count', () => {
+    const s = setup();
+    const before = s.players[0].lives;
+    s.powerUp = { kind: 'tank', x: p0Tank(s).x, y: p0Tank(s).y, spawnedTick: s.tick };
+    const events = step(s, [NONE]);
+    expect(s.players[0].lives).toBe(before + 1);
+    const ev = events.find((e) => e.type === 'extraLife');
+    expect(ev).toMatchObject({ type: 'extraLife', slot: 0, lives: before + 1, converted: false });
+  });
+
+  it('pays score instead of doing nothing when lives are already capped', () => {
+    const s = setup();
+    s.players[0].lives = MAX_LIVES;
+    const score = s.players[0].score;
+    s.powerUp = { kind: 'tank', x: p0Tank(s).x, y: p0Tank(s).y, spawnedTick: s.tick };
+    const events = step(s, [NONE]);
+    expect(s.players[0].lives).toBe(MAX_LIVES);
+    // The pickup always pays POWERUP_SCORE; at the cap it also pays the extra-life bonus.
+    expect(s.players[0].score).toBe(score + POWERUP_SCORE + EXTRA_LIFE_BONUS_SCORE);
+    expect(events.find((e) => e.type === 'extraLife')).toMatchObject({ converted: true });
+  });
+});
+
+describe('versus pickups', () => {
+  it('never drops a match-swinging pickup', () => {
+    // Every drop is drawn from the seeded RNG, so sweeping seeds covers the whole pool.
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = makeState(seed, 1, [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], 'versus');
+      dropPowerUp(s);
+      expect(VERSUS_POWERUP_KINDS, `seed ${seed} dropped ${s.powerUp?.kind}`).toContain(s.powerUp!.kind);
+    }
+  });
+
+  it('still drops the full pool in co-op', () => {
+    const seen = new Set<PowerUpKind>();
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = makeState(seed);
+      dropPowerUp(s);
+      seen.add(s.powerUp!.kind);
+    }
+    expect(seen.has('grenade')).toBe(true);
+    expect(seen.has('gun')).toBe(true);
+    expect(seen.has('clock')).toBe(true);
+  });
+
+  it('ignores bought grenade, clock and star consumables in versus', () => {
+    const s = makeState(5, 1, [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], 'versus');
+    const others = s.tanks.filter((t) => t.kind !== 'player').length;
+    s.players[0].tier = 0;
+    step(s, [NONE, NONE], [{ type: 'grenade', slot: 0 }, { type: 'clock', slot: 0 }, { type: 'star', slot: 0 }]);
+    expect(s.effects.freezeUntil).toBe(0);
+    expect(s.players[0].tier).toBe(0);
+    expect(s.tanks.filter((t) => t.kind !== 'player').length).toBe(others);
+  });
+
+  it('still honours those consumables in co-op', () => {
+    const s = makeState(5);
+    s.players[0].tier = 0;
+    step(s, [NONE], [{ type: 'clock', slot: 0 }, { type: 'star', slot: 0 }]);
+    expect(s.effects.freezeUntil).toBeGreaterThan(0);
+    expect(s.players[0].tier).toBe(1);
   });
 });

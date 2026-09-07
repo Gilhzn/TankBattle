@@ -370,6 +370,43 @@ html[dir='rtl'] .btn.back .chev {
 .hud-player-lives {
   color: var(--danger);
 }
+/* An extra life is the one pickup with no effect on the tank itself, so the counter it does change
+   announces itself for a moment. */
+.hud-player.gained {
+  animation: hud-life-gained 1.1s ease-out;
+}
+.hud-player.gained .hud-player-lives {
+  animation: hud-life-pop 1.1s ease-out;
+}
+@keyframes hud-life-gained {
+  0%,
+  100% {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: none;
+  }
+  15% {
+    background: rgba(255, 94, 196, 0.35);
+    box-shadow: 0 0 0 2px rgba(255, 94, 196, 0.5);
+  }
+}
+@keyframes hud-life-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-player.gained,
+  .hud-player.gained .hud-player-lives {
+    animation: none;
+  }
+  .hud-player.gained {
+    box-shadow: 0 0 0 2px rgba(255, 94, 196, 0.5);
+  }
+}
 .hud-effects {
   display: flex;
   gap: 6px;

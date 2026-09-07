@@ -1,5 +1,5 @@
 import {
-  MAX_TIER, PLAYER_SPEED, PLAYER_SPAWN_TILES, RESPAWN_DELAY_TICKS, RESPAWN_SHIELD_TICKS, TANK_SIZE, TILE, GRID, ICE_SLIDE_TICKS,
+  MAX_TIER, PLAYER_SPEED, PLAYER_SPAWN_TILES, RESPAWN_DELAY_TICKS, RESPAWN_SHIELD_TICKS, TANK_SIZE, TILE, GRID, ICE_SLIDE_TICKS, VERSUS_KILL_SCORE,
 } from '../constants.js';
 import type { GameState, Input, PlayerSlot, Tank } from '../types.js';
 import { moveTank, positionFree, tankOnIce } from './movement.js';
@@ -47,6 +47,7 @@ export function spawnPlayerTank(state: GameState, p: PlayerSlot): Tank | null {
     slide: 0,
     ai: { timer: 0, blocked: 0 },
     skin: p.skin,
+    team: p.team,
   };
   state.tanks.push(tank);
   p.tankId = tank.id;
@@ -72,16 +73,22 @@ export function killPlayerTank(state: GameState, tank: Tank, bySlot: number): vo
   state.events.push({ type: 'playerDied', slot: p.slot });
   if (state.mode === 'versus') {
     const killer = state.players[bySlot];
-    if (killer && killer.slot !== p.slot) {
+    // A teammate's shell cannot reach you in 2v2, but a wall bounce or a suicide still can: only a
+    // kill on the other side scores.
+    if (killer && killer.slot !== p.slot && !sameTeam(killer, p)) {
       killer.kills++;
-      killer.score += 1000;
-      state.events.push({ type: 'score', slot: killer.slot, amount: 1000, x: tank.x + TANK_SIZE / 2, y: tank.y + TANK_SIZE / 2 });
+      killer.score += VERSUS_KILL_SCORE;
+      state.events.push({ type: 'score', slot: killer.slot, amount: VERSUS_KILL_SCORE, x: tank.x + TANK_SIZE / 2, y: tank.y + TANK_SIZE / 2 });
     }
-    p.respawnAt = state.tick + RESPAWN_DELAY_TICKS;
-    return;
   }
   p.lives--;
   if (p.lives > 0) p.respawnAt = state.tick + RESPAWN_DELAY_TICKS;
+  else if (state.mode === 'versus') state.events.push({ type: 'eliminated', slot: p.slot, team: p.team });
+}
+
+/** True when both seats fight for the same side. Distinct sides in free-for-all, so this is false there. */
+export function sameTeam(a: PlayerSlot, b: PlayerSlot): boolean {
+  return a.team >= 0 && a.team === b.team;
 }
 
 export function updatePlayers(state: GameState, inputs: ReadonlyArray<Input | null | undefined>): void {
@@ -89,7 +96,7 @@ export function updatePlayers(state: GameState, inputs: ReadonlyArray<Input | nu
     if (!p.active) continue;
     let tank = playerTank(state, p);
     if (!tank) {
-      const canRespawn = state.mode === 'versus' || p.lives > 0;
+      const canRespawn = p.lives > 0;
       if (canRespawn && p.respawnAt > 0 && state.tick >= p.respawnAt) {
         const t = spawnPlayerTank(state, p);
         if (t) p.respawnAt = 0;

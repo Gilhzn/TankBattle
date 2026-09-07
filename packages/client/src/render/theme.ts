@@ -18,8 +18,15 @@ export const COLORS = {
   water: '#0b3a66',
   waterLight: '#2f8fd6',
   waterGlow: '#5ee1ff',
-  ice: '#9fd8ff',
-  iceDark: '#3b6d9c',
+  /**
+   * Packed snow, not ice. A translucent pale blue read as *glass* — players saw a window, not a
+   * surface, and had no reason to expect it to be slippery. These are opaque, matte and bright:
+   * a solid drift you can see skid marks on.
+   */
+  snow: '#eef5fb',
+  snowShade: '#c3d6e8',
+  snowDeep: '#93aec7',
+  snowTrack: '#7e9cba',
   trees: '#1f9a4a',
   treesLight: '#5ee97a',
   treesDark: '#0c3f22',

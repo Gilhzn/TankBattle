@@ -31,6 +31,8 @@ export class Hud {
   private itemsEl: HTMLElement;
   private itemButtons = new Map<string, { btn: HTMLButtonElement; count: HTMLElement }>();
   private last = { stage: -1, enemies: -1, lives: '', effects: '', rtt: -2, items: '', time: -1, paused: false };
+  /** slot -> time the "life gained" highlight expires. */
+  private pulses = new Map<number, number>();
 
   constructor(private cb: HudCallbacks) {
     this.stageEl = h('div', { class: 'hud-stage', dataset: { testid: 'hud-stage' } });
@@ -62,6 +64,11 @@ export class Hud {
     );
   }
 
+  /** Highlights a player's life counter for a moment — used when an extra life lands. */
+  pulseLives(slot: number): void {
+    this.pulses.set(slot, performance.now() + 1200);
+  }
+
   update(view: ViewState, info: HudInfo): void {
     const L = this.last;
     if (view.stage !== L.stage) {
@@ -79,7 +86,12 @@ export class Hud {
       for (let i = 0; i < shown; i++) this.enemiesEl.appendChild(h('i', { class: 'enemy-icon' }));
       if (remaining > shown) this.enemiesEl.appendChild(h('span', { class: 'enemy-more' }, `+${remaining - shown}`));
     }
-    const livesKey = view.players.map((p) => `${p.slot}:${p.name}:${p.lives}:${p.score}:${p.active}:${p.skin}:${p.kills}`).join('|') + info.mySlot;
+    // The chip is rebuilt whenever any of these change, so the pulse has to live in the key too or
+    // the rebuild triggered by the life itself would drop the class before it ever animated.
+    const now = performance.now();
+    for (const [slot, until] of this.pulses) if (until <= now) this.pulses.delete(slot);
+    const livesKey =
+      view.players.map((p) => `${p.slot}:${p.name}:${p.lives}:${p.score}:${p.active}:${p.skin}:${p.kills}:${this.pulses.has(p.slot) ? 1 : 0}`).join('|') + info.mySlot;
     if (livesKey !== L.lives) {
       L.lives = livesKey;
       clear(this.livesEl);
@@ -90,7 +102,11 @@ export class Hud {
         this.livesEl.appendChild(
           h(
             'div',
-            { class: `hud-player${isMe ? ' me' : ''}`, style: { '--pc': skin.primary } as unknown as Partial<CSSStyleDeclaration>, dataset: { slot: String(p.slot), lives: String(p.lives) } },
+            {
+              class: `hud-player${isMe ? ' me' : ''}${this.pulses.has(p.slot) ? ' gained' : ''}`,
+              style: { '--pc': skin.primary } as unknown as Partial<CSSStyleDeclaration>,
+              dataset: { slot: String(p.slot), lives: String(p.lives) },
+            },
             h('span', { class: 'hud-player-name' }, isMe && info.mode === 'local' ? t('common.you') : p.name || `P${p.slot + 1}`),
             h('span', { class: 'hud-player-lives', attrs: { 'aria-label': t('hud.lives') } }, view.mode === 'versus' ? `☠ ${p.kills}` : `♥ ${p.lives}`),
             h('span', { class: 'hud-player-score' }, p.score.toLocaleString()),

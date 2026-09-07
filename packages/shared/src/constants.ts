@@ -56,7 +56,13 @@ export const DIFFICULTY: Record<'easy' | 'normal' | 'hard', DifficultyTuning> = 
   normal: { fire: 0.55, speed: 0.85, spawnInterval: 1.45, maxOnScreen: 3, aggression: 0.45, lives: 4 },
   hard: { fire: 1, speed: 1, spawnInterval: 1, maxOnScreen: 4, aggression: 1, lives: 3 },
 };
+/** Eliminations a player gets in a versus match before they are out for good. */
+export const VERSUS_LIVES = 3;
+/** Score for eliminating an opponent in versus. */
+export const VERSUS_KILL_SCORE = 1000;
 export const MAX_LIVES = 9;
+/** Paid instead of an extra life when the player is already at MAX_LIVES, so the pickup is never a no-op. */
+export const EXTRA_LIFE_BONUS_SCORE = 1000;
 export const MAX_TIER = 3;
 
 export const PLAYER_SPEED = 16; // sub per tick (2px)

@@ -4,7 +4,7 @@ import {
 import { getTile, isSolidForBullet, rectsOverlap, setTile, tileSpan } from '../grid.js';
 import { Tile, type Bullet, type GameState, type Tank } from '../types.js';
 import { dropPowerUp } from './powerups.js';
-import { killPlayerTank } from './players.js';
+import { killPlayerTank, sameTeam } from './players.js';
 
 export function maxBulletsFor(tank: Tank): number {
   if (tank.kind !== 'player') return 1;
@@ -127,7 +127,12 @@ function bulletHitsTank(state: GameState, b: Bullet, tank: Tank): 'pass' | 'abso
   if (b.fromPlayer && !targetIsPlayer) return tank.shieldUntil > state.tick ? 'absorb' : 'kill';
   if (!b.fromPlayer && targetIsPlayer) return tank.shieldUntil > state.tick ? 'absorb' : 'kill';
   if (b.fromPlayer && targetIsPlayer) {
-    if (state.mode === 'versus' && b.owner !== tank.owner) return tank.shieldUntil > state.tick ? 'absorb' : 'kill';
+    // In 2v2 a teammate's shell passes straight through, so a partner crossing your line of fire is
+    // never a liability. In free-for-all every other player is a target.
+    const shooter = state.players[b.owner];
+    const target = state.players[tank.owner];
+    const allied = !!shooter && !!target && sameTeam(shooter, target);
+    if (state.mode === 'versus' && b.owner !== tank.owner && !allied) return tank.shieldUntil > state.tick ? 'absorb' : 'kill';
     return 'pass';
   }
   return 'pass';
@@ -180,7 +185,12 @@ export function updateBullets(state: GameState): void {
       const c = alive[j];
       if (!state.bullets.includes(a) || !state.bullets.includes(c)) continue;
       if (a.owner === c.owner && a.owner === -1) continue; // enemy bullets pass each other
-      if (a.fromPlayer && c.fromPlayer && state.mode === 'coop') continue;
+      if (a.fromPlayer && c.fromPlayer) {
+        const pa = state.players[a.owner];
+        const pc = state.players[c.owner];
+        // Allies' shells pass each other: in co-op always, in 2v2 within a team.
+        if (state.mode === 'coop' || (pa && pc && sameTeam(pa, pc))) continue;
+      }
       if (sweptOverlap(a, c)) {
         state.events.push({ type: 'hit', x: a.x + BULLET_SIZE / 2, y: a.y + BULLET_SIZE / 2 });
         removeBullet(state, a);

@@ -6,6 +6,20 @@ export function checkStageStatus(state: GameState): void {
   if (state.status !== 'playing') return;
   if (state.mode === 'versus') {
     state.timeLeft--;
+    // Last side standing wins. Everyone has a fixed number of eliminations, so a match normally ends
+    // here; the clock is only the fallback for a stalemate where nobody can finish anybody off.
+    const standing = new Set<number>();
+    for (const p of state.players) {
+      if (!p.active) continue;
+      if (p.lives > 0 || p.tankId !== null) standing.add(p.team);
+    }
+    if (standing.size <= 1 && state.players.some((p) => p.active)) {
+      state.status = 'gameOver';
+      state.statusSince = state.tick;
+      state.gameOverReason = 'eliminated';
+      state.events.push({ type: 'gameOver', reason: 'eliminated' });
+      return;
+    }
     if (state.timeLeft <= 0) {
       state.status = 'gameOver';
       state.statusSince = state.tick;

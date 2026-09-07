@@ -1,14 +1,20 @@
 import {
-  CLOCK_TICKS, ENEMY_CLOCK_TICKS, HELMET_TICKS, MAX_LIVES, POWERUP_LIFETIME_TICKS, POWERUP_SCORE, POWERUP_SIZE, SHOVEL_FLASH_TICKS, SHOVEL_TICKS, TANK_SIZE, TILE, GRID, BULLET_SPEED_FAST,
+  CLOCK_TICKS, ENEMY_CLOCK_TICKS, EXTRA_LIFE_BONUS_SCORE, HELMET_TICKS, MAX_LIVES, POWERUP_LIFETIME_TICKS, POWERUP_SCORE, POWERUP_SIZE, SHOVEL_FLASH_TICKS, SHOVEL_TICKS, TANK_SIZE, TILE, GRID, BULLET_SPEED_FAST,
 } from '../constants.js';
 import { baseRingTiles, getTile, rectsOverlap, setTile } from '../grid.js';
-import { Tile, POWERUP_KINDS, type GameState, type PowerUpKind, type Tank } from '../types.js';
+import { Tile, POWERUP_KINDS, VERSUS_POWERUP_KINDS, type GameState, type PowerUpKind, type Tank } from '../types.js';
 import { makeRng, saveRng } from './state.js';
 import { killPlayerTank, upgradePlayer } from './players.js';
 
+/** The pickup pool for a match: versus runs a reduced set so no drop can decide a duel. */
+export function powerUpPool(state: GameState): PowerUpKind[] {
+  return state.mode === 'versus' ? VERSUS_POWERUP_KINDS : POWERUP_KINDS;
+}
+
 export function dropPowerUp(state: GameState): void {
   const rng = makeRng(state);
-  const kind = POWERUP_KINDS[rng.int(POWERUP_KINDS.length)];
+  const pool = powerUpPool(state);
+  const kind = pool[rng.int(pool.length)];
   let x = 0;
   let y = 0;
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -76,9 +82,16 @@ function applyToPlayer(state: GameState, kind: PowerUpKind, tank: Tank): void {
     case 'gun':
       upgradePlayer(state, p, 3);
       break;
-    case 'tank':
-      p.lives = Math.min(MAX_LIVES, p.lives + 1);
+    case 'tank': {
+      // Every other pickup shows itself on the tank or the field; this one only nudged a number in
+      // the corner, so it read as "nothing happened". It now announces itself — and at the life cap
+      // it pays out score instead of silently doing nothing at all.
+      const capped = p.lives >= MAX_LIVES;
+      if (!capped) p.lives++;
+      else p.score += EXTRA_LIFE_BONUS_SCORE;
+      state.events.push({ type: 'extraLife', slot: p.slot, lives: p.lives, converted: capped, x: tank.x + TANK_SIZE / 2, y: tank.y + TANK_SIZE / 2 });
       break;
+    }
     case 'grenade':
       grenade(state, p.slot);
       break;

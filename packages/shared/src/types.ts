@@ -16,7 +16,21 @@ export type TankKind = 'player' | 'basic' | 'fast' | 'power' | 'armor';
 export type EnemyKind = Exclude<TankKind, 'player'>;
 export type PowerUpKind = 'star' | 'tank' | 'grenade' | 'clock' | 'shovel' | 'helmet' | 'ship' | 'gun';
 export const POWERUP_KINDS: PowerUpKind[] = ['star', 'tank', 'grenade', 'clock', 'shovel', 'helmet', 'ship', 'gun'];
+
+/**
+ * Pickups allowed in player-vs-player matches. A duel is decided by aim and position, so the
+ * match-swinging pickups are cut: `grenade` wipes the field from across the map, `gun`/`star` hand
+ * one player a permanently better weapon, `clock` freezes the opponent, and `shovel` only protects
+ * a base no versus arena has. What is left is small and situational — a shield, water crossing, and
+ * the extra life that keeps a losing player in the match without deciding it.
+ */
+export const VERSUS_POWERUP_KINDS: PowerUpKind[] = ['helmet', 'ship', 'tank'];
 export type GameMode = 'coop' | 'versus';
+/**
+ * How a versus match splits its seats. 'ffa' is every player for themselves (up to 4); 'teams' is
+ * 2v2, where teammates cannot shoot each other and win or lose together.
+ */
+export type VersusFormat = 'ffa' | 'teams';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type GameStatus = 'playing' | 'stageClear' | 'gameOver';
 
@@ -47,6 +61,8 @@ export interface Tank {
   slide: number;
   ai: AiState;
   skin: string;
+  /** Side this tank fights for: the owner's team in versus, -1 for AI and for every co-op tank. */
+  team: number;
 }
 
 export interface Bullet {
@@ -83,6 +99,8 @@ export interface PlayerSlot {
   tier: number;
   respawnAt: number;
   skin: string;
+  /** Side in versus: own slot in free-for-all, 0 or 1 in 2v2. -1 in co-op, where everyone allies. */
+  team: number;
   /** In-match consumable use counters, enforced by the server. */
   usedItems: Record<string, number>;
 }
@@ -129,9 +147,13 @@ export type TickEvent =
   | { type: 'pickup'; kind: PowerUpKind; slot: number; x: number; y: number }
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }
   | { type: 'score'; slot: number; amount: number; x: number; y: number }
+  /** An extra life landed (or was converted to score because the player was already capped). */
+  | { type: 'extraLife'; slot: number; lives: number; converted: boolean; x: number; y: number }
   | { type: 'baseDestroyed' }
   | { type: 'stageClear'; stage: number }
-  | { type: 'gameOver'; reason: 'base' | 'lives' | 'time' }
+  | { type: 'gameOver'; reason: 'base' | 'lives' | 'time' | 'eliminated' }
+  /** A versus player spent their last life and is out for the rest of the match. */
+  | { type: 'eliminated'; slot: number; team: number }
   | { type: 'stageStart'; stage: number }
   | { type: 'freeze' }
   | { type: 'grenade' };
@@ -157,8 +179,10 @@ export interface GameState {
   /** Tile indices changed since the last snapshot flush (server clears). */
   tileChanges: number[];
   events: TickEvent[];
-  gameOverReason: 'base' | 'lives' | 'time' | null;
+  gameOverReason: 'base' | 'lives' | 'time' | 'eliminated' | null;
   timeLeft: number;
+  /** Seat split for a versus match. Meaningless (and always 'ffa') in co-op. */
+  versusFormat: VersusFormat;
 }
 
 export interface StageDef {

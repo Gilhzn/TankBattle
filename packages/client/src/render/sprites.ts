@@ -636,16 +636,48 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
       break;
     }
     case Tile.ICE: {
-      ctx.fillStyle = rgba(COLORS.ice, 0.22);
+      // Packed snow. Opaque and matte so it reads as a surface rather than a pane of glass, with
+      // skid streaks along the drift: the tell that a tank carries its momentum across this tile.
+      const g = ctx.createLinearGradient(x, y, x, y + s);
+      g.addColorStop(0, COLORS.snow);
+      g.addColorStop(0.62, COLORS.snowShade);
+      g.addColorStop(1, COLORS.snowDeep);
+      ctx.fillStyle = g;
       ctx.fillRect(x, y, s, s);
-      ctx.strokeStyle = rgba(COLORS.ice, 0.35);
-      ctx.lineWidth = Math.max(0.5, s * 0.05);
+
+      // Wind-blown drift ridges: soft horizontal bands, offset per tile so a field of snow does
+      // not stripe into one continuous line.
+      const seed = (tx * 73 + ty * 151) % 5;
+      ctx.fillStyle = rgba(COLORS.white, 0.5);
+      for (let i = 0; i < 2; i++) {
+        const by = y + s * (0.22 + ((i * 2 + seed) % 5) * 0.14);
+        ctx.fillRect(x + s * 0.06, by, s * 0.88, Math.max(0.6, s * 0.07));
+      }
+
+      // Skid streaks — two parallel scores in the drift, sloped so they read as motion.
+      ctx.strokeStyle = rgba(COLORS.snowTrack, 0.55);
+      ctx.lineWidth = Math.max(0.6, s * 0.055);
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(x + s * 0.15, y + s * 0.7);
-      ctx.lineTo(x + s * 0.55, y + s * 0.3);
-      ctx.moveTo(x + s * 0.5, y + s * 0.85);
-      ctx.lineTo(x + s * 0.85, y + s * 0.5);
+      ctx.moveTo(x + s * 0.12, y + s * 0.74);
+      ctx.lineTo(x + s * 0.62, y + s * 0.62);
+      ctx.moveTo(x + s * 0.34, y + s * 0.92);
+      ctx.lineTo(x + s * 0.88, y + s * 0.79);
       ctx.stroke();
+
+      // Granular sparkle: a few deterministic flecks so the surface looks crystalline up close.
+      ctx.fillStyle = rgba(COLORS.white, 0.85);
+      for (let i = 0; i < 4; i++) {
+        const h = (tx * 31 + ty * 17 + i * 97) % 64;
+        const fx = x + s * (0.1 + ((h % 8) / 8) * 0.8);
+        const fy = y + s * (0.1 + (Math.floor(h / 8) / 8) * 0.8);
+        ctx.fillRect(fx, fy, Math.max(0.6, s * 0.05), Math.max(0.6, s * 0.05));
+      }
+
+      // Cold rim so adjacent snow tiles still read as separate blocks against the dark field.
+      ctx.strokeStyle = rgba(COLORS.snowDeep, 0.5);
+      ctx.lineWidth = Math.max(0.5, s * 0.045);
+      ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, s - ctx.lineWidth, s - ctx.lineWidth);
       break;
     }
     case Tile.WATER: {
