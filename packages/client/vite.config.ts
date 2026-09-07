@@ -24,6 +24,8 @@ function assetManifestPlugin(): Plugin {
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  // Overridable for a GitHub Pages project-site build (served under /<repo>/); defaults to root for normal hosting.
+  base: process.env.VITE_BASE || '/',
   plugins: [assetManifestPlugin()],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),

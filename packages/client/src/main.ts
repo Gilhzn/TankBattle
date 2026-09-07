@@ -67,7 +67,9 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => app.set({ online: false }));
 
 // ---------- PWA service worker (production only) ----------
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+// The hand-written worker assumes root-absolute paths, so it's skipped on a non-root base
+// (e.g. a GitHub Pages project site served under /<repo>/) rather than caching the wrong URLs.
+if (import.meta.env.PROD && import.meta.env.BASE_URL === '/' && 'serviceWorker' in navigator) {
   // Only an update to an ALREADY controlling worker counts as "new version"; the very first install is silent.
   const hadController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', () => {
