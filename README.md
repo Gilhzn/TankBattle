@@ -39,6 +39,19 @@ e2e               Playwright tests (desktop, mobile emulation, two-browser multi
 docs/API.md       REST + WebSocket contract
 ```
 
+## Deploying
+
+**Vercel (client only — solo play).** The repo carries a `vercel.json`, so importing it at [vercel.com/new](https://vercel.com/new) needs no further setup: Vercel installs the workspace, builds `@tank/shared` then `@tank/client`, and serves `packages/client/dist`. Every push to the branch redeploys.
+
+Vercel runs serverless functions, which cannot hold the long-lived WebSocket connections the game server needs — so a Vercel deployment serves the client only. Solo play, all 12 stages, power-ups, touch controls and the full UI work there; multiplayer, the store, battle pass and gifting stay in their offline state because there is no server behind them.
+
+**Full game, multiplayer included.** `packages/server` is a long-running Node process (WebSocket + REST + SQLite) and needs a host that keeps a process alive — Render, Railway, Fly.io, or any VPS. It serves the built client itself, so one service covers everything:
+
+```bash
+npm ci && npm run build
+PORT=8080 SECRET=<a long random string> DB_PATH=.data/tank.db npm start
+```
+
 ## Tests
 ```bash
 npm test           # vitest: shared sim, server integration, client units
