@@ -78,6 +78,10 @@ export class Session implements PlayerLink {
 
   /** Called by the gateway when the same user connects elsewhere or the socket drops. */
   detachFromRoom(): void {
+    if (this.user) {
+      this.deps.presence.disconnect(this.user.id);
+      this.deps.matchmaker.leave(this.user.id);
+    }
     if (this.room && this.user) this.room.disconnect(this.user.id);
     this.room = null;
   }
@@ -167,7 +171,27 @@ export class Session implements PlayerLink {
       }
       case 'leaveRoom':
         this.leaveCurrent();
+        this.deps.matchmaker.leave(user.id);
         this.send({ type: 'left' });
+        return;
+      case 'rankedQueue': {
+        this.leaveCurrent();
+        this.deps.matchmaker.enqueue({
+          user: this.roomUser(),
+          link: this,
+          rating: this.deps.ranking.rating(user.id),
+          country: user.country,
+          lang: msg.lang,
+          format: msg.versusFormat,
+          loadout: msg.loadout,
+          queuedAt: this.deps.clock(),
+        });
+        this.send({ type: 'queued', since: this.deps.clock(), searching: true });
+        return;
+      }
+      case 'rankedCancel':
+        this.deps.matchmaker.leave(user.id);
+        this.send({ type: 'queued', since: this.deps.clock(), searching: false });
         return;
       case 'setReady':
         this.requireRoom().setReady(user.id, msg.ready);
@@ -212,6 +236,7 @@ export class Session implements PlayerLink {
     if (this.helloTimer) clearTimeout(this.helloTimer);
     this.helloTimer = null;
     this.user = user;
+    this.deps.presence.connect(user.id);
     this.onAuth(this);
     this.send({ type: 'welcome', playerId: user.id, name: user.nickname, serverTime: this.deps.clock(), tickRate: this.deps.tickRate, snapshotRate: this.deps.snapshotRate });
   }

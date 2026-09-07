@@ -12,6 +12,8 @@ import type { MxLookup } from './auth/email.js';
 import { FriendsService } from './social/friends.js';
 import { Presence } from './social/presence.js';
 import { RankingService } from './social/ranking.js';
+import { Matchmaker } from './rooms/matchmaker.js';
+import { LlmChatResponder, ScriptedChatResponder, type ChatResponder } from './game/botChat.js';
 import { loadConfig, type Config } from './config.js';
 import { openDb } from './db/index.js';
 import type { LedgerCurrency, UserRow } from './db/repo.js';
@@ -133,7 +135,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     quickPlayWaitMs: opts.quickPlayWaitMs,
     disconnectGraceMs: opts.disconnectGraceMs,
     createRunner: (room) =>
-      new GameRunner(room, { inventory, wallet, results, log: log.child('game'), tickRate: config.tickRate, snapshotEvery: config.snapshotEvery, fullSnapshotEvery: config.fullSnapshotEvery }),
+      new GameRunner(room, { inventory, wallet, results, ranking, log: log.child('game'), tickRate: config.tickRate, snapshotEvery: config.snapshotEvery, fullSnapshotEvery: config.fullSnapshotEvery }),
   });
 
   const authenticate = (token: string): UserRow | null => {
@@ -141,8 +143,20 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return payload ? (db.users.get(payload.sub) ?? null) : null;
   };
 
+  const chatResponder: ChatResponder = process.env.BOT_CHAT_API_KEY
+    ? new LlmChatResponder({ apiKey: process.env.BOT_CHAT_API_KEY, log: log.child('botchat'), fallback: new ScriptedChatResponder() })
+    : new ScriptedChatResponder();
+  const matchmaker = new Matchmaker({
+    rooms,
+    clock,
+    log: log.child('ranked'),
+    botTimeoutMs: config.matchmakingTimeoutMs,
+    chatResponder,
+    onMatched: (ticket, room) => ticket.link.send({ type: 'matchFound', roomId: room.id }),
+  });
+
   const app: App = {
-    config, log, clock, db, users, accounts, friends, ranking, presence, authenticate,
+    config, log, clock, db, users, accounts, friends, ranking, presence, authenticate, matchmaker,
     wallet, inventory, store, battlepass, rewards, gifts, results, solo, provider, rooms, startedAt: Date.now(),
   };
 
@@ -162,7 +176,10 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
         if (!res.headersSent) res.writeHead(500).end();
       });
   });
-  const gateway = new Gateway(server, { clock, log: log.child('ws'), rooms, tickRate: config.tickRate, snapshotRate: config.tickRate / config.snapshotEvery, authenticate });
+  const gateway = new Gateway(server, {
+    clock, log: log.child('ws'), rooms, matchmaker, ranking, presence,
+    tickRate: config.tickRate, snapshotRate: config.tickRate / config.snapshotEvery, authenticate,
+  });
 
   await new Promise<void>((res, rej) => {
     server.once('error', rej);

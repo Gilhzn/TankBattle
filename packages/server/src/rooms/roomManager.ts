@@ -44,10 +44,12 @@ export class RoomManager {
     quickPlay = false,
     difficulty: Difficulty = 'normal',
     versusFormat: VersusFormat = 'ffa',
+    /** Versus only: which arena to play in, chosen from the players' rating band. */
+    stage = 0,
   ): Room {
     let code = newJoinCode();
     while (this.byCode.has(code)) code = newJoinCode();
-    const room = new Room(newId(), code, mode, difficulty, versusFormat, isPrivate, quickPlay, {
+    const room = new Room(newId(), code, mode, difficulty, versusFormat, isPrivate, quickPlay, stage, {
       clock: this.opts.clock,
       log: this.opts.log,
       countdownMs: this.opts.countdownMs,

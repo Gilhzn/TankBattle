@@ -1,5 +1,7 @@
 import type { Difficulty } from '@tank/shared';
 import { MAX_PLAYERS, teamOf, type RoomPlayerInfo, type RoomStateMessage, type RoomStatus, type ServerMessage, type VersusFormat } from '@tank/shared';
+import { VersusBot } from '../game/bot.js';
+import { typingDelayMs, type ChatResponder } from '../game/botChat.js';
 import type { GameRunner } from '../game/runner.js';
 import { newNonce } from '../util/ids.js';
 import type { Logger } from '../util/log.js';
@@ -20,6 +22,19 @@ export interface RoomPlayer {
   resumeToken: string;
   link: PlayerLink | null;
   disconnectTimer: NodeJS.Timeout | null;
+  /**
+   * Set when this seat is filled by the game rather than a person. It occupies an ordinary seat and
+   * is reported like any other player, so the wire format cannot be used to tell them apart.
+   */
+  bot?: BotSeat;
+}
+
+/** A seat the game plays itself: the controller that drives it and the chat voice behind it. */
+export interface BotSeat {
+  controller: VersusBot;
+  rating: number;
+  chat: ChatResponder;
+  lang: 'en' | 'he';
 }
 
 export interface RoomDeps {
@@ -44,6 +59,9 @@ export class Room {
   pairedSince: number | null = null;
   readonly createdAt: number;
   private countdownTimer: NodeJS.Timeout | null = null;
+  /** What each bot has already said, so it does not repeat a line within one match. */
+  private chatHistory = new Map<string, string[]>();
+  private botChatTimers = new Set<NodeJS.Timeout>();
   private emptyTimer: NodeJS.Timeout | null = null;
   private destroyed = false;
 
@@ -55,6 +73,8 @@ export class Room {
     readonly versusFormat: VersusFormat,
     readonly isPrivate: boolean,
     readonly quickPlay: boolean,
+    /** Versus arena index, from the players' rating band. Ignored in co-op, which starts at stage 1. */
+    readonly stage: number,
     private readonly deps: RoomDeps,
   ) {
     this.createdAt = deps.clock();
@@ -78,6 +98,31 @@ export class Room {
 
   player(userId: string): RoomPlayer | undefined {
     return this.players.find((p) => p.id === userId);
+  }
+
+  /** True when a person is sitting in this seat. */
+  get humanPlayers(): RoomPlayer[] {
+    return this.players.filter((p) => !p.bot);
+  }
+
+  /**
+   * Seats a bot. It takes a normal slot with a normal id, so every path that walks `players` —
+   * seat compaction, snapshots, room state — treats it exactly like a person.
+   */
+  addBot(seat: { id: string; name: string; skin: string; bot: BotSeat }): RoomPlayer {
+    const used = new Set(this.players.map((p) => p.slot));
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    const p: RoomPlayer = {
+      id: seat.id, name: seat.name, skin: seat.skin, slot, ready: true, connected: true,
+      loadout: [], resumeToken: newNonce(18), link: null, disconnectTimer: null, bot: seat.bot,
+    };
+    p.bot!.controller = new VersusBot(slot, p.bot!.controller.skill);
+    this.players.push(p);
+    this.players.sort((a, b) => a.slot - b.slot);
+    this.clearEmptyTimer();
+    this.broadcastState();
+    return p;
   }
 
   /** Lobby-only join. Throws RoomError('room_full' | 'in_progress'). */
@@ -113,7 +158,9 @@ export class Room {
     if (this.runner) this.runner.removePlayer(p.slot);
     if (this.hostId === p.id) this.hostId = this.players[0]?.id ?? '';
     if (this.players.length < 2) this.pairedSince = null;
-    if (this.players.length === 0) {
+    // A room with only bots left in it is empty: there is nobody for them to play against.
+    if (this.humanPlayers.length === 0) {
+      this.players = [];
       this.cancelCountdown();
       if (this.runner) {
         this.runner.stop();
@@ -177,6 +224,40 @@ export class Room {
     const p = this.player(userId);
     if (!p) return;
     this.broadcast({ type: 'chat', from: p.id, name: p.name, text });
+    for (const other of this.players) if (other.bot) void this.botReply(other, p, text);
+  }
+
+  /**
+   * A bot answering a message. The reply is delayed by how long it would have taken to type — an
+   * instant answer is the loudest tell there is — and is dropped if the match ends meanwhile.
+   */
+  private async botReply(bot: RoomPlayer, from: RoomPlayer, text: string): Promise<void> {
+    const seat = bot.bot;
+    if (!seat) return;
+    const history = this.chatHistory.get(bot.id) ?? [];
+    const mine = this.runner?.state.players[bot.slot];
+    const theirs = this.runner?.state.players[from.slot];
+    const standing = !mine || !theirs ? 0 : mine.kills > theirs.kills ? 1 : mine.kills < theirs.kills ? -1 : 0;
+    let reply: string | null = null;
+    try {
+      reply = await seat.chat.reply({
+        text, opponentName: from.name, selfName: bot.name, lang: seat.lang, standing: standing as -1 | 0 | 1, history,
+      });
+    } catch (err) {
+      this.deps.log.debug('bot chat failed', err);
+      return;
+    }
+    if (!reply || this.destroyed) return;
+    history.push(reply);
+    this.chatHistory.set(bot.id, history.slice(-8));
+    const delay = typingDelayMs(reply);
+    const timer = setTimeout(() => {
+      this.botChatTimers.delete(timer);
+      if (this.destroyed || !this.player(bot.id)) return;
+      this.broadcast({ type: 'chat', from: bot.id, name: bot.name, text: reply });
+    }, delay);
+    timer.unref?.();
+    this.botChatTimers.add(timer);
   }
 
   /** Host-initiated (or automatic) start: countdown then `gameStart`. */
@@ -261,6 +342,9 @@ export class Room {
     this.runner?.stop();
     this.runner = null;
     for (const p of this.players) if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    for (const t of this.botChatTimers) clearTimeout(t);
+    this.botChatTimers.clear();
+    this.chatHistory.clear();
     this.players = [];
   }
 

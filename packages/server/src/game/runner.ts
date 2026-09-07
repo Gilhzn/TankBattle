@@ -9,6 +9,7 @@ import type { Room, RoomPlayer } from '../rooms/room.js';
 import { newSeed } from '../util/ids.js';
 import type { Logger } from '../util/log.js';
 import type { ResultsService } from './results.js';
+import type { RankingService } from '../social/ranking.js';
 import { commandFor } from './solo.js';
 
 export interface RunnerDeps {
@@ -21,6 +22,8 @@ export interface RunnerDeps {
   fullSnapshotEvery: number;
   /** Ticks a dead party gets to use a revive token before the match is finalised. */
   reviveGraceTicks?: number;
+  /** Present for ranked play; absent in tests that only exercise the simulation. */
+  ranking?: RankingService;
 }
 
 const MAX_CATCHUP_TICKS = 5;
@@ -29,7 +32,7 @@ const MAX_CATCHUP_TICKS = 5;
 export class GameRunner {
   readonly state: GameState;
   readonly seed: number;
-  readonly startStage = 1;
+  readonly startStage: number;
   private inputs: Array<Input | null> = [];
   private lastSeq: number[] = [];
   private pending: Command[] = [];
@@ -48,6 +51,8 @@ export class GameRunner {
   ) {
     this.seed = newSeed();
     this.tickMs = 1000 / deps.tickRate;
+    // Co-op always opens on stage 1; versus opens in the arena the matchmaker picked.
+    this.startStage = room.mode === 'versus' ? room.stage : 1;
     const players = [...room.players].sort((a, b) => a.slot - b.slot).map((p) => ({ id: p.id, name: p.name, skin: p.skin }));
     this.state = createInitialState(this.seed, this.startStage, players, room.mode, room.difficulty, room.versusFormat);
   }
@@ -154,6 +159,11 @@ export class GameRunner {
   private stepOnce(): void {
     const commands = this.pending;
     this.pending = [];
+    // Bots decide immediately before the tick they act on, so they see exactly the state a human's
+    // client would have rendered — no privileged look-ahead, just no network delay.
+    for (const p of this.room.players) {
+      if (p.bot) this.inputs[p.slot] = p.bot.controller.think(this.state);
+    }
     const inputs = this.state.players.map((_, i) => this.inputs[i] ?? null);
     const wasOver = this.state.status === 'gameOver';
     try {
@@ -174,6 +184,31 @@ export class GameRunner {
     } else if (this.graceUntil !== null) {
       if (this.state.status === 'playing') this.graceUntil = null;
       else if (this.state.tick >= this.graceUntil) this.finish(this.state.gameOverReason ?? 'lives');
+    }
+  }
+
+  /**
+   * Applies the match to everyone's ranked standing. A bot has no row of its own, but its rating
+   * still counts as the opposition the human was scored against — that is what keeps the ladder
+   * honest when a seat was filled by the game.
+   */
+  private recordRanked(winners: number[]): void {
+    if (!this.deps.ranking) return;
+    const ratingsByTeam = new Map<number, number[]>();
+    const outcomes: Array<{ userId: string; team: number; won: boolean; drew: boolean }> = [];
+    for (const p of this.room.players) {
+      const ps = this.state.players[p.slot];
+      if (!ps?.active) continue;
+      const rating = p.bot ? p.bot.rating : this.deps.ranking.rating(p.id);
+      ratingsByTeam.set(ps.team, [...(ratingsByTeam.get(ps.team) ?? []), rating]);
+      // Bots are left out of the outcome list: there is no account to move.
+      if (!p.bot) outcomes.push({ userId: p.id, team: ps.team, won: winners.includes(ps.team), drew: winners.length !== 1 });
+    }
+    if (!outcomes.length) return;
+    try {
+      this.deps.ranking.record(outcomes, ratingsByTeam);
+    } catch (err) {
+      this.deps.log.error(`room ${this.room.code}: failed to record ranked result`, err);
     }
   }
 
@@ -233,6 +268,7 @@ export class GameRunner {
         won: coop ? stagesCleared > 0 : winners.includes(ps.team),
       });
     }
+    if (!coop) this.recordRanked(winners);
     this.room.broadcast({ type: 'gameOver', reason, results });
     for (const p of this.room.players) {
       const w = this.deps.wallet.get(p.id);

@@ -3,6 +3,9 @@ import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import type { UserRow } from '../db/repo.js';
 import type { RoomManager } from '../rooms/roomManager.js';
+import type { Matchmaker } from '../rooms/matchmaker.js';
+import type { RankingService } from '../social/ranking.js';
+import type { Presence } from '../social/presence.js';
 import type { Logger } from '../util/log.js';
 import type { Clock } from '../util/time.js';
 import { Session } from './session.js';
@@ -11,6 +14,9 @@ export interface GatewayDeps {
   clock: Clock;
   log: Logger;
   rooms: RoomManager;
+  matchmaker: Matchmaker;
+  ranking: RankingService;
+  presence: Presence;
   tickRate: number;
   snapshotRate: number;
   /** Token → user (null when invalid). */

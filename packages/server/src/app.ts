@@ -15,6 +15,7 @@ import type { WalletService } from './economy/wallet.js';
 import type { ResultsService } from './game/results.js';
 import type { SoloService } from './game/solo.js';
 import type { RoomManager } from './rooms/roomManager.js';
+import type { Matchmaker } from './rooms/matchmaker.js';
 import type { Logger } from './util/log.js';
 import type { Clock } from './util/time.js';
 
@@ -39,6 +40,7 @@ export interface App {
   solo: SoloService;
   provider: PaymentProvider;
   rooms: RoomManager;
+  matchmaker: Matchmaker;
   startedAt: number;
   /** Resolves a bearer token, for routes that accept an optional signed-in user. */
   authenticate(token: string): UserRow | null;

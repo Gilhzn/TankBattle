@@ -24,6 +24,13 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('joinRoom'), code: codeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
   z.object({ type: z.literal('quickPlay'), mode: modeSchema, loadout: z.array(skuSchema).max(6).default([]), versusFormat: versusFormatSchema.default('ffa') }),
   z.object({ type: z.literal('leaveRoom') }),
+  z.object({
+    type: z.literal('rankedQueue'),
+    versusFormat: versusFormatSchema.default('ffa'),
+    loadout: z.array(skuSchema).max(6).default([]),
+    lang: z.enum(['en', 'he']).default('en'),
+  }),
+  z.object({ type: z.literal('rankedCancel') }),
   z.object({ type: z.literal('setReady'), ready: z.boolean() }),
   z.object({ type: z.literal('setLoadout'), loadout: z.array(skuSchema).max(6) }),
   z.object({ type: z.literal('startGame') }),
@@ -82,6 +89,8 @@ export type ServerMessage =
   | { type: 'welcome'; playerId: string; name: string; serverTime: number; tickRate: number; snapshotRate: number }
   | RoomStateMessage
   | { type: 'matchFound'; roomId: string }
+  /** Position in the ranked queue, sent while a player waits. */
+  | { type: 'queued'; since: number; searching: boolean }
   | { type: 'gameStart'; seed: number; stage: number; snapshot: unknown; yourSlot: number }
   | { type: 'snapshot'; snapshot: unknown }
   | { type: 'stageClear'; stage: number; scores: Array<{ playerId: string; score: number }>; coinsEarned: number }
