@@ -4,7 +4,7 @@ import type { FriendsService } from './social/friends.js';
 import type { RankingService } from './social/ranking.js';
 import type { Presence } from './social/presence.js';
 import type { Config } from './config.js';
-import type { Db } from './db/repo.js';
+import type { Db, UserRow } from './db/repo.js';
 import type { BattlepassService } from './economy/battlepass.js';
 import type { GiftsService } from './economy/gifts.js';
 import type { InventoryService } from './economy/inventory.js';
@@ -40,4 +40,6 @@ export interface App {
   provider: PaymentProvider;
   rooms: RoomManager;
   startedAt: number;
+  /** Resolves a bearer token, for routes that accept an optional signed-in user. */
+  authenticate(token: string): UserRow | null;
 }

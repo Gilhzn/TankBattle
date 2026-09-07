@@ -17,6 +17,10 @@ export function startTestServer(extra: StartOptions = {}): Promise<RunningServer
     staticDir: null,
     logLevel: 'error',
     countdownMs: 50,
+    // Every test in a file shares one IP, so the production per-IP throughput budget would throttle
+    // the suite itself rather than any real abuse. Raised here only; the defaults are what ships.
+    // `authFailPerMin` is deliberately left alone — auth.test.ts asserts that limiter still bites.
+    limits: { ipPerSec: 10_000, ipBurst: 10_000, userPerSec: 10_000, userBurst: 10_000 },
     ...extra,
   });
 }

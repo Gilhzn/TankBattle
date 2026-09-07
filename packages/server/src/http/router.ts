@@ -94,6 +94,9 @@ export class Router {
   patch(path: string, handler: Handler, opts?: RouteOptions): this {
     return this.add('PATCH', path, handler, opts);
   }
+  delete(path: string, handler: Handler, opts?: RouteOptions): this {
+    return this.add('DELETE', path, handler, opts);
+  }
 
   /** Handles the request; returns false when no route matched (caller may serve static files). */
   async handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -166,7 +169,7 @@ export class Router {
     if (!origin || !DEV_ORIGIN.test(origin)) return;
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     res.setHeader('Access-Control-Max-Age', '600');
   }

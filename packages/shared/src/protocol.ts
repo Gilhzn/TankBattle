@@ -123,3 +123,66 @@ export const soloResultSchema = z.object({
   claimedStage: z.number().int().min(1),
 });
 export type BoostEffect = z.infer<typeof boostEffectSchema>;
+
+// ---------------------------------------------------------------------------
+// Accounts, friends and ranking
+// ---------------------------------------------------------------------------
+
+/** A single sign-in method the client may offer. */
+export type AuthProviderName = 'google' | 'email';
+
+export const googleAuthSchema = z.object({
+  idToken: z.string().min(20).max(4096),
+  /** ISO 3166-1 alpha-2, for the national leaderboard. */
+  country: z.string().trim().length(2).optional(),
+});
+export const emailStartSchema = z.object({
+  email: z.string().trim().min(3).max(254),
+  lang: z.enum(['en', 'he']).default('en'),
+});
+export const emailVerifySchema = z.object({
+  email: z.string().trim().min(3).max(254),
+  code: z.string().trim().regex(/^\d{6}$/),
+  country: z.string().trim().length(2).optional(),
+});
+export const nicknameCheckSchema = z.object({ nickname: nicknameSchema });
+export const friendRequestSchema = z.object({ nickname: nicknameSchema });
+export const inviteAcceptSchema = z.object({ code: z.string().min(8).max(256) });
+
+export interface PresenceDTO {
+  state: 'online' | 'in_match' | 'offline';
+  lastSeen: number;
+}
+
+export interface FriendDTO extends PresenceDTO {
+  id: string;
+  nickname: string;
+  skin: string;
+  country: string;
+  rating: number;
+  since: number;
+}
+
+export interface FriendRequestDTO {
+  id: string;
+  user: { id: string; nickname: string; skin: string; country: string; rating: number };
+  createdAt: number;
+}
+
+export interface RankDTO {
+  position: number;
+  of: number;
+}
+
+export interface RatingProfileDTO {
+  rating: number;
+  best: number;
+  tier: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  matches: number;
+  world: RankDTO;
+  country: RankDTO;
+  countryCode: string;
+}

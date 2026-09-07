@@ -27,7 +27,7 @@ import { WalletService } from './economy/wallet.js';
 import { ResultsService } from './game/results.js';
 import { GameRunner } from './game/runner.js';
 import { SoloService } from './game/solo.js';
-import { Router } from './http/router.js';
+import { Router, type RouterDeps } from './http/router.js';
 import { registerRoutes } from './http/routes/index.js';
 import { serveStatic } from './http/static.js';
 import { RoomManager } from './rooms/roomManager.js';
@@ -55,6 +55,8 @@ export interface StartOptions {
   mailer?: Mailer;
   /** Injectable MX lookup so tests do not depend on DNS. */
   mx?: MxLookup;
+  /** Overrides the request rate limits. Tests raise them because they all share one IP. */
+  limits?: RouterDeps['limits'];
   /** Exposes `debug` helpers (tests only). */
   debug?: boolean;
   config?: Partial<Config>;
@@ -134,17 +136,17 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       new GameRunner(room, { inventory, wallet, results, log: log.child('game'), tickRate: config.tickRate, snapshotEvery: config.snapshotEvery, fullSnapshotEvery: config.fullSnapshotEvery }),
   });
 
-  const app: App = {
-    config, log, clock, db, users, accounts, friends, ranking, presence,
-    wallet, inventory, store, battlepass, rewards, gifts, results, solo, provider, rooms, startedAt: Date.now(),
-  };
-
   const authenticate = (token: string): UserRow | null => {
     const payload = verify(config.secret, token, clock());
     return payload ? (db.users.get(payload.sub) ?? null) : null;
   };
 
-  const router = new Router({ log, clock, authenticate });
+  const app: App = {
+    config, log, clock, db, users, accounts, friends, ranking, presence, authenticate,
+    wallet, inventory, store, battlepass, rewards, gifts, results, solo, provider, rooms, startedAt: Date.now(),
+  };
+
+  const router = new Router({ log, clock, authenticate, limits: opts.limits });
   registerRoutes(router, app);
 
   const server: Server = createServer((req, res) => {
