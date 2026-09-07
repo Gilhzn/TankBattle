@@ -4,6 +4,9 @@
   display: flex;
   min-height: 0;
   touch-action: none;
+  /* The zones hold no text, and their sides are physical: keep them left-to-right so an RTL
+     document (Hebrew) does not silently swap the joystick and the fire button. */
+  direction: ltr;
 }
 .game-screen:not(.touch) .touch-layer {
   display: none;
