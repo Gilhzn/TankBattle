@@ -47,7 +47,10 @@ export interface Palette {
  */
 const ENEMY_PALETTES: Record<Exclude<TankKind, 'player'>, Palette> = {
   basic: { primary: '#8c96a8', secondary: '#333a47', glow: '#aeb8c8', shape: 'grunt' },
-  fast: { primary: '#a8916a', secondary: '#41341d', glow: '#c9b492', shape: 'scout' },
+  // Khaki *ash*, not sand: the earlier tone sat in the same hue family as the gold player skin and
+  // the two read alike at tank size. Crushing lightness and saturation keeps the scout warm-metal
+  // while putting ~30 points of lightness and ~80 of saturation between it and #ffd166.
+  fast: { primary: '#7a6f57', secondary: '#2b2618', glow: '#c2b08a', shape: 'scout' },
   power: { primary: '#b5563a', secondary: '#511d13', glow: '#dd8f6f', shape: 'brute' },
   armor: { primary: '#7f9440', secondary: '#2f3a15', glow: '#b3c977', shape: 'bulwark' },
 };

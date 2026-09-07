@@ -163,17 +163,21 @@ const CHASSIS: Record<TankShape, Chassis> = {
     turret: 'round', turretR: 2.3, turretY: 8.3,
     barrelW: 1.2, barrelTip: 0.9, muzzle: 'none', extras: 'stacks', cupola: false, antenna: false,
   },
+  // Gun platform: narrow tracks, sharply pointed nose, hex turret with a cupola and a long
+  // flared cannon that overhangs the hull. Reads as "all barrel".
   brute: {
-    trackW: 4.0, trackR: 0.5, trackSpans: [[1.0, 15.0]], treadStep: 1.4, treadH: 0.75, skirt: false,
-    hull: [[4.6, 3.6], [8, 1.8], [11.4, 3.6], [12.4, 5.0], [12.4, 13.7], [3.6, 13.7], [3.6, 5.0]],
-    turret: 'box', turretR: 3.1, turretY: 9.0,
-    barrelW: 2.4, barrelTip: 1.1, muzzle: 'flare', extras: 'stacks', cupola: false, antenna: false,
+    trackW: 3.4, trackR: 0.5, trackSpans: [[1.6, 14.4]], treadStep: 1.4, treadH: 0.7, skirt: false,
+    hull: [[4.6, 3.6], [8, 1.4], [11.4, 3.6], [12.6, 5.2], [12.6, 13.7], [3.4, 13.7], [3.4, 5.2]],
+    turret: 'hex', turretR: 3.0, turretY: 9.4,
+    barrelW: 2.7, barrelTip: 0.6, muzzle: 'flare', extras: 'vents', cupola: true, antenna: false,
   },
+  // Slab: the widest tracks in the game, skirted, with a plain rectangular hull and a stubby
+  // ring-braked stub gun that barely clears the deck. Reads as "all armour".
   bulwark: {
-    trackW: 3.8, trackR: 0.35, trackSpans: [[0.8, 15.2]], treadStep: 1.6, treadH: 0.8, skirt: false,
-    hull: null, hullRect: [3.3, 2.0, 9.4, 12.0, 1.0],
-    turret: 'box', turretR: 3.4, turretY: 8.8,
-    barrelW: 2.2, barrelTip: 1.7, muzzle: 'ring', extras: 'bands', cupola: false, antenna: false,
+    trackW: 4.4, trackR: 0.3, trackSpans: [[0.8, 15.2]], treadStep: 1.7, treadH: 0.85, skirt: true,
+    hull: null, hullRect: [3.9, 2.0, 8.2, 12.2, 0.6],
+    turret: 'box', turretR: 3.4, turretY: 8.6,
+    barrelW: 2.1, barrelTip: 2.6, muzzle: 'ring', extras: 'bands', cupola: false, antenna: false,
   },
 };
 

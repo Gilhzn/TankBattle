@@ -73,7 +73,9 @@ function hitTiles(state: GameState, b: Bullet): boolean {
         const ty = ty0 + dy * d;
         const t = getTile(state.tiles, tx, ty);
         if (t === Tile.BASE) {
-          destroyBase(state);
+          // Only the enemy can take the base. Firing sideways along the base row is far too easy to
+          // do by accident, and losing the run to your own shot reads as a bug rather than a rule.
+          if (!b.fromPlayer) destroyBase(state);
         } else if (t === Tile.BRICK || (t === Tile.STEEL && b.power)) {
           setTile(state, tx, ty, Tile.EMPTY);
           state.events.push({ type: 'brick', x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });

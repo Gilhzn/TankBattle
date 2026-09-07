@@ -144,11 +144,26 @@ describe('bullets', () => {
     expect(s.bullets.length).toBe(0);
     expect(s.tanks.length).toBe(2);
   });
-  it('a shot at the base destroys it and ends the game', () => {
+  it('an enemy shell destroys the base and ends the game', () => {
+    const s = makeState();
+    clearEnemies(s);
+    // an enemy sitting above the base ring, facing down, with the brick in front cleared
+    const e = enemyAt(s, 12 * TILE, 21 * TILE);
+    e.dir = 2;
+    e.cooldown = 0;
+    s.tiles[tileIndex(12, 23)] = Tile.EMPTY;
+    s.tiles[tileIndex(13, 23)] = Tile.EMPTY;
+    tryFire(s, e);
+    for (let i = 0; i < 10; i++) step(s, [NONE]);
+    expect(s.baseAlive).toBe(false);
+    expect(s.status).toBe('gameOver');
+    expect(s.gameOverReason).toBe('base');
+    expect(getTile(s.tiles, 12, 24)).toBe(Tile.BASE_DEAD);
+  });
+  it('a player cannot destroy their own base, and the shot is still absorbed', () => {
     const s = makeState();
     clearEnemies(s);
     const t = p0Tank(s);
-    // put the tank right above the base ring, facing down, and remove the ring brick in front
     t.x = 12 * TILE;
     t.y = 21 * TILE;
     t.dir = 2;
@@ -156,10 +171,11 @@ describe('bullets', () => {
     s.tiles[tileIndex(13, 23)] = Tile.EMPTY;
     tryFire(s, t);
     for (let i = 0; i < 10; i++) step(s, [NONE]);
-    expect(s.baseAlive).toBe(false);
-    expect(s.status).toBe('gameOver');
-    expect(s.gameOverReason).toBe('base');
-    expect(getTile(s.tiles, 12, 24)).toBe(Tile.BASE_DEAD);
+    expect(s.baseAlive).toBe(true);
+    expect(s.status).toBe('playing');
+    expect(getTile(s.tiles, 12, 24)).toBe(Tile.BASE);
+    // the bullet stops at the base rather than passing through it
+    expect(s.bullets.length).toBe(0);
   });
   it('spawning enemies are invulnerable', () => {
     const s = makeState();
