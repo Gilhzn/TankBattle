@@ -4,7 +4,7 @@ import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { app, toast } from '../../app/store.js';
 import { t } from '../../i18n/index.js';
-import { button, emptyState, offlineNotice, panel, screenShell, spinner, tabs } from '../components.js';
+import { awaitBoot, button, emptyState, offlineNotice, panel, screenShell, spinner, tabs } from '../components.js';
 
 type Tab = 'friends' | 'requests' | 'add';
 
@@ -169,7 +169,7 @@ export function friendsScreen(root: HTMLElement): () => void {
   };
 
   const load = async (): Promise<void> => {
-    if (!app.get().online) {
+    if (!(await awaitBoot())) {
       clear(body);
       body.appendChild(offlineNotice(t('friends.offline')));
       return;

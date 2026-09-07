@@ -229,3 +229,24 @@ export function toggle(checked: boolean, onChange: (v: boolean) => void, testid?
   const input = h('input', { type: 'checkbox', checked, dataset: testid ? { testid } : undefined, onchange: () => onChange(input.checked) });
   return h('span', { class: 'switch' }, input, h('span', { class: 'switch-track' }, h('span', { class: 'switch-knob' })));
 }
+
+/**
+ * Waits for the guest-auth boot to finish before a screen decides whether it is online.
+ *
+ * A screen opened directly — a deep link, a shared invite, a refresh — mounts while boot is still
+ * in flight, and `online` is false until it lands. Checking it immediately makes every such screen
+ * claim the player is offline when they are not, which matters most for an invite link, since that
+ * is *always* opened cold from someone else's message.
+ */
+export async function awaitBoot(): Promise<boolean> {
+  if (app.get().booted) return app.get().online;
+  await new Promise<void>((resolve) => {
+    const unsub = app.subscribe((s) => {
+      if (s.booted) {
+        unsub();
+        resolve();
+      }
+    });
+  });
+  return app.get().online;
+}

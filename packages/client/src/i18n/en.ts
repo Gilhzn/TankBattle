@@ -393,6 +393,7 @@ export const en = {
   'auth.nicknameFree': 'Available',
   // ---------- ranked ----------
   'ranked.title': 'Ranked',
+  'ranked.hint': 'Paired against someone at your rating. Win to climb, lose to drop.',
   'ranked.queue': 'Find a match',
   'ranked.searching': 'Looking for an opponent\u2026',
   'ranked.cancel': 'Cancel',

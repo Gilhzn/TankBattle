@@ -18,6 +18,54 @@ npm start            # serves the built client and the API/WS on PORT (default 8
 
 Environment variables (server): `PORT`, `SECRET` (token signing key), `DB_PATH` (`.data/tank.db` default; `:memory:` or `json:<path>` to force the JSON store), `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (enables the Stripe provider; otherwise the sandbox mock store is used).
 
+### Accounts
+
+Guest play needs no configuration. The two real sign-in methods each need a credential you have to
+create yourself; without it the game keeps working and simply does not offer that method.
+
+| Variable | What it enables | Where it comes from |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | "Continue with Google" | A **Web application** OAuth client in [Google Cloud Console](https://console.cloud.google.com/apis/credentials). Add your site to *Authorised JavaScript origins*. Only the client id is needed — there is no secret to store, because the client runs Google's own flow and the server verifies the resulting ID token against Google's published keys. |
+| `MAIL_PROVIDER` | Email sign-in codes | `resend`, `sendgrid`, or `custom`. |
+| `MAIL_API_KEY` | " | The provider's API key. |
+| `MAIL_FROM` | " | A sender address you have verified with that provider. |
+| `MAIL_ENDPOINT` | " | Only for `custom`: the URL to POST to. |
+
+With no `MAIL_PROVIDER`, verification codes are written to the server log instead of emailed, and
+the sign-in screen says so rather than pretending a message was sent. That is fine for local
+development and wrong for production.
+
+Email sign-up refuses throwaway inbox providers, shared role addresses (`support@`, `admin@`) and
+domains that publish no mail servers, and confirms the address with a six-digit code before the
+account exists.
+
+### Ranked play
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MATCHMAKING_TIMEOUT_MS` | `20000` | How long a player waits for a human opponent before the game fills the match itself. |
+| `BOT_CHAT_API_KEY` | *(unset)* | An Anthropic API key for match chat from filled seats. Without it a built-in responder is used, which needs no network. |
+
+## Multiplayer
+
+- **Ranked 1v1** pairs by rating (Elo, starting at 1000, K=20 — an even match moves 10 points, a
+  slightly weaker opponent 9, a slightly stronger one 11). The search window widens as you wait; if
+  nobody suitable appears within `MATCHMAKING_TIMEOUT_MS` the game fills the seat itself with an
+  opponent rated near you and playing at that level. The arena changes every 100 rating points.
+- **Free-for-all** seats up to four players, everyone for themselves.
+- **2v2** pairs alternating seats across the arena. Teammates' shells pass through each other and a
+  teammate's death scores nothing.
+- Everyone gets **three eliminations**; the match ends when one side is left standing, with the
+  clock as a stalemate fallback.
+- Versus drops only pickups that cannot decide a duel — no grenade, no weapon upgrade, no freeze —
+  and bought consumables are blocked on the same grounds, so nobody wins from the store.
+
+## Friends
+
+Requests are addressed by nickname (unique, case-insensitive), or shared as a WhatsApp link that
+sends the request automatically when opened. The list shows who is online, who is in a match, and
+when everyone else was last seen.
+
 ## Gameplay
 - 26x26 tile field, 4-direction movement, brick (destructible), steel (only tier-3 shells), trees (hide tanks), water (blocks tanks unless you have the ship), ice (slides).
 - Destroy all 20 enemies per stage (basic, fast, power, armor). Enemies #4, #11 and #18 flash and drop power-ups: ★ star, 1UP tank, 💣 grenade, ⏱ clock, 🛡 shovel, ⛑ helmet, ship, gun. Enemies can grab power-ups too, with nasty effects.

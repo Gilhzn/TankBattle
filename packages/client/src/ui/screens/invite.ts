@@ -3,7 +3,7 @@ import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { app, toast } from '../../app/store.js';
 import { t } from '../../i18n/index.js';
-import { button, emptyState, offlineNotice, panel, screenShell, spinner } from '../components.js';
+import { awaitBoot, button, emptyState, offlineNotice, panel, screenShell, spinner } from '../components.js';
 
 /**
  * Where a shared invite link lands.
@@ -37,7 +37,7 @@ export function inviteScreen(root: HTMLElement, params: Record<string, string> =
       body.appendChild(emptyState(t('invite.bad')));
       return;
     }
-    if (!app.get().online) {
+    if (!(await awaitBoot())) {
       body.appendChild(offlineNotice(t('invite.offline')));
       return;
     }

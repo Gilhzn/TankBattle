@@ -142,7 +142,8 @@ export function getToken(): string | null {
   }
 }
 
-function setToken(token: string | null): void {
+/** Stores the session token. Exported so a completed sign-in can adopt its new one. */
+export function setToken(token: string | null): void {
   app.set({ token });
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);

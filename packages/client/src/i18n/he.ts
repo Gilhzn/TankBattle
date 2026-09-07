@@ -379,6 +379,7 @@ export const he: Partial<Record<TranslationKey, string>> = {
   'auth.nicknameFree': 'פנוי',
   // ---------- ranked ----------
   'ranked.title': 'מדורג',
+  'ranked.hint': 'משחקים מול מישהו בדירוג שלכם. נצחון מעלה, הפסד מוריד.',
   'ranked.queue': 'חיפוש משחק',
   'ranked.searching': 'מחפש יריב\u2026',
   'ranked.cancel': 'ביטול',

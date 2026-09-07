@@ -4,7 +4,7 @@ import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { app, toast } from '../../app/store.js';
 import { t } from '../../i18n/index.js';
-import { button, emptyState, offlineNotice, panel, screenShell, spinner, tankPreview } from '../components.js';
+import { awaitBoot, button, emptyState, offlineNotice, panel, screenShell, spinner, tankPreview } from '../components.js';
 
 /** A rank as "#12 of 340", or a dash while the player is still unrated. */
 function rankText(r: { position: number; of: number }): string {
@@ -124,7 +124,7 @@ export function profileScreen(root: HTMLElement, params: Record<string, string> 
   };
 
   const load = async (): Promise<void> => {
-    if (!app.get().online) {
+    if (!(await awaitBoot())) {
       clear(body);
       body.appendChild(offlineNotice(t('profile.offline')));
       return;

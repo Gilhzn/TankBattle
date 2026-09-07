@@ -283,6 +283,13 @@ export class WsClient implements GameTransport {
   quickPlay(mode: GameMode, loadout: string[], versusFormat: VersusFormat = 'ffa'): void {
     this.send({ type: 'quickPlay', mode, loadout, versusFormat });
   }
+  /** Joins the ranked queue. The server pairs by rating, or fills the match itself if nobody comes. */
+  rankedQueue(versusFormat: VersusFormat = 'ffa', lang: 'en' | 'he' = 'en', loadout: string[] = []): void {
+    this.send({ type: 'rankedQueue', versusFormat, lang, loadout });
+  }
+  rankedCancel(): void {
+    this.send({ type: 'rankedCancel' });
+  }
   leaveRoom(): void {
     this.send({ type: 'leaveRoom' });
     this.room = null;

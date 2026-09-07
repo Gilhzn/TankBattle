@@ -3,7 +3,7 @@ import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { settings } from '../../app/settings.js';
 import { app, toast } from '../../app/store.js';
-import { t } from '../../i18n/index.js';
+import { getLang, t } from '../../i18n/index.js';
 import { ws, type WsState } from '../../net/wsClient.js';
 import { button, displayName, itemIcon, offlineNotice, panel, screenShell, spinner, tankPreview, toggle } from '../components.js';
 
@@ -21,6 +21,21 @@ export function lobbyScreen(root: HTMLElement): () => void {
   const body = shell.body;
   let mode: GameMode = 'coop';
   let versusFormat: VersusFormat = 'ffa';
+  let queued = false;
+
+  const rankedBtn = button(t('ranked.queue'), {
+    kind: 'primary',
+    big: true,
+    testid: 'lobby-ranked',
+    onClick: () => {
+      if (queued) {
+        ws.rankedCancel();
+        return;
+      }
+      ws.rankedQueue(versusFormat, getLang());
+      setStatus(t('ranked.searching'));
+    },
+  });
   let isPrivate = false;
   let loadout = settings.get().mpLoadout.filter((s) => ownedBoosts().includes(s)).slice(0, MAX_LOADOUT);
   const chatLog: Array<{ name: string; text: string }> = [];
@@ -109,6 +124,12 @@ export function lobbyScreen(root: HTMLElement): () => void {
         h('h2', null, t('lobby.quickPlay')),
         h('p', { class: 'muted' }, t('lobby.quickPlayHint')),
         button(`${t('lobby.quickPlay')} · ${t(`lobby.${mode}`)}`, { kind: 'accent', big: true, testid: 'lobby-quick', onClick: () => { setStatus(t('common.loading')); ws.quickPlay(mode, mode === 'versus' ? [] : loadout, versusFormat); } }),
+      ),
+      // Ranked is its own path: it pairs by rating rather than by whoever is free.
+      panel(
+        h('h2', null, t('ranked.title')),
+        h('p', { class: 'muted' }, t('ranked.hint')),
+        rankedBtn,
       ),
     );
   };
@@ -237,7 +258,14 @@ export function lobbyScreen(root: HTMLElement): () => void {
         if (ws.room) renderRoom(ws.room);
         else renderHome();
         break;
+      case 'queued':
+        queued = msg.searching;
+        rankedBtn.textContent = queued ? t('ranked.cancel') : t('ranked.queue');
+        if (!queued) setStatus('');
+        break;
       case 'matchFound':
+        queued = false;
+        rankedBtn.textContent = t('ranked.queue');
         toast(t('lobby.matchFound'), 'success');
         break;
       case 'gameStart':
