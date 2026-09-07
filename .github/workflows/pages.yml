@@ -4,7 +4,7 @@ on:
   push:
     branches: [claude/tank-1990-multiplayer-ik03sk, main]
   workflow_dispatch:
-  # trigger: retry after enabling Pages source = GitHub Actions
+  # trigger: retry after setting Workflow permissions to Read and write
 
 permissions:
   contents: read
