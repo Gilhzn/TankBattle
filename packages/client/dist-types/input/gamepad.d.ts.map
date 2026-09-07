@@ -1,0 +1,1 @@
+{"version":3,"file":"gamepad.d.ts","sourceRoot":"","sources":["../../src/input/gamepad.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAO,KAAK,EAAE,MAAM,cAAc,CAAC;AAG/C,kGAAkG;AAClG,qBAAa,YAAY;IACvB,OAAO,CAAC,OAAO,CAAgB;IAC/B,OAAO,CAAC,SAAS,CAAS;IAC1B,OAAO,EAAE,CAAC,MAAM,IAAI,CAAC,GAAG,IAAI,CAAQ;IAEpC,iDAAiD;IACjD,IAAI,IAAI,KAAK,GAAG,IAAI;CAwBrB"}

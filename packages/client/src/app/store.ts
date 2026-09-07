@@ -67,7 +67,7 @@ export interface AppState {
 }
 
 export const app = new Store<AppState>({
-  screen: 'menu',
+  screen: 'boot',
   booted: false,
   online: false,
   token: null,

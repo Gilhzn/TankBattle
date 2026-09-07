@@ -71,3 +71,8 @@ export function applyDocumentSettings(s: Settings = settings.get()): void {
 export function isCoarsePointer(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
+
+/** True when touch is a plausible primary input (coarse pointer or any touch points). */
+export function hasTouchInput(): boolean {
+  return isCoarsePointer() || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || 'ontouchstart' in window;
+}

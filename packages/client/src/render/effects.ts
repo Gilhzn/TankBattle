@@ -100,7 +100,7 @@ export class Effects {
     }
   }
 
-  sparks(x: number, y: number, color = COLORS.amber): void {
+  sparks(x: number, y: number, color: string = COLORS.amber): void {
     const n = this.count(7);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -149,7 +149,7 @@ export class Effects {
     }
   }
 
-  popup(x: number, y: number, text: string, color = COLORS.amber): void {
+  popup(x: number, y: number, text: string, color: string = COLORS.amber): void {
     if (this.popups.length >= MAX_POPUPS) this.popups.shift();
     this.popups.push({ x, y, text, life: 900, max: 900, color });
   }

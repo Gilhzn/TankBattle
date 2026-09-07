@@ -3,7 +3,7 @@ import {
   type MatchResult, type PowerUpKind, type Snapshot, type TickEvent, type ViewState,
 } from '@tank/shared';
 import { h } from '../app/h.js';
-import { settings, isCoarsePointer } from '../app/settings.js';
+import { settings, hasTouchInput } from '../app/settings.js';
 import { toast } from '../app/store.js';
 import { sfx } from '../audio/sfx.js';
 import { t, itemName } from '../i18n/index.js';
@@ -89,7 +89,7 @@ export class GameView {
     this.fieldWrap = h('div', { class: 'field-wrap' }, this.canvas, this.bannerLayer, this.pauseOverlay);
     this.hud = new Hud({ onPause: () => this.togglePause(), onUseItem: (sku) => this.useItem(sku) });
     this.touchLayer = h('div', { class: 'touch-layer', dataset: { testid: 'touch-controls' } });
-    const coarse = isCoarsePointer();
+    const coarse = hasTouchInput();
     this.el = h('div', { class: `game-screen mode-${tr.mode}${coarse ? ' touch' : ''}` }, this.hud.el, this.fieldWrap, this.touchLayer);
     this.input = new InputManager({
       touchLayer: this.touchLayer,
@@ -132,7 +132,10 @@ export class GameView {
   private layout(): void {
     const rect = this.fieldWrap.getBoundingClientRect();
     const size = Math.floor(Math.min(rect.width, rect.height));
-    if (size > 0) this.renderer.resize(size);
+    if (size > 0) {
+      this.renderer.resize(size);
+      this.el.style.setProperty('--field-size', `${size}px`);
+    }
   }
 
   private onVisibility = (): void => {

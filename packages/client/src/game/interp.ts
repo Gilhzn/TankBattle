@@ -12,8 +12,10 @@ interface Frame {
   bullets: Map<number, Pos>;
 }
 
-/** Distance above which positions are snapped instead of interpolated (a respawn/teleport). */
+/** Distance above which tank positions are snapped instead of interpolated (a respawn/teleport). */
 export const SNAP_DISTANCE = TILE;
+/** Bullets never teleport (a new bullet gets a new id) but cover up to 2 tiles between snapshots. */
+export const BULLET_SNAP_DISTANCE = TILE * 8;
 
 /**
  * Keeps the last N snapshots and produces smoothly interpolated entity positions
@@ -74,7 +76,8 @@ export class InterpBuffer {
     const pb = b?.[kind].get(id);
     if (pa && pb && a && b) {
       if (a === b || b.t === a.t) return pb;
-      if (Math.abs(pb.x - pa.x) > SNAP_DISTANCE || Math.abs(pb.y - pa.y) > SNAP_DISTANCE) return pb;
+      const snapAt = kind === 'tanks' ? SNAP_DISTANCE : BULLET_SNAP_DISTANCE;
+      if (Math.abs(pb.x - pa.x) > snapAt || Math.abs(pb.y - pa.y) > snapAt) return pb;
       const f = (rt - a.t) / (b.t - a.t);
       return { x: pa.x + (pb.x - pa.x) * f, y: pa.y + (pb.y - pa.y) * f };
     }

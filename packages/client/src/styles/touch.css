@@ -1,0 +1,153 @@
+/* Touch controls: floating joystick + fire button. Sides mirror with html.hand-right. */
+.touch-layer {
+  grid-area: controls;
+  display: flex;
+  min-height: 0;
+  touch-action: none;
+}
+.game-screen:not(.touch) .touch-layer {
+  display: none;
+}
+.touch-zone {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  touch-action: none;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touch-zone.move {
+  order: 0;
+}
+.touch-zone.fire {
+  order: 1;
+  display: grid;
+  place-items: center;
+}
+html.hand-right .touch-zone.move {
+  order: 1;
+}
+html.hand-right .touch-zone.fire {
+  order: 0;
+}
+@media (orientation: landscape) {
+  .touch-layer {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--field-size) minmax(0, 1fr);
+    grid-template-areas: 'move field fire';
+    pointer-events: none;
+  }
+  .touch-zone {
+    pointer-events: auto;
+    min-height: 0;
+  }
+  .touch-zone.move {
+    grid-area: move;
+  }
+  .touch-zone.fire {
+    grid-area: fire;
+  }
+  html.hand-right .touch-zone.move {
+    grid-area: fire;
+  }
+  html.hand-right .touch-zone.fire {
+    grid-area: move;
+  }
+}
+
+.joystick {
+  position: absolute;
+  width: var(--joystick-size);
+  height: var(--joystick-size);
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.joystick.idle {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.35;
+}
+.joy-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(94, 225, 255, 0.55);
+  background: radial-gradient(circle, rgba(94, 225, 255, 0.08), rgba(94, 225, 255, 0.02) 70%);
+  box-shadow: 0 0 24px rgba(94, 225, 255, 0.2), inset 0 0 24px rgba(94, 225, 255, 0.08);
+}
+.joy-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--joystick-size) * 0.42);
+  height: calc(var(--joystick-size) * 0.42);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 35%, #d9f7ff, var(--cyan) 50%, #1f7bb3);
+  box-shadow: 0 6px 20px rgba(94, 225, 255, 0.5);
+  transition: transform 0.04s linear;
+}
+.joy-arrows span {
+  position: absolute;
+  font-size: 12px;
+  color: rgba(94, 225, 255, 0.55);
+  transition: color 0.1s, text-shadow 0.1s;
+}
+.joy-arrows .d0 {
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.joy-arrows .d1 {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.joy-arrows .d2 {
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.joy-arrows .d3 {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.joystick[data-dir='0'] .d0,
+.joystick[data-dir='1'] .d1,
+.joystick[data-dir='2'] .d2,
+.joystick[data-dir='3'] .d3 {
+  color: #fff;
+  text-shadow: 0 0 10px var(--cyan);
+}
+
+.fire-button {
+  width: calc(var(--joystick-size) * 0.7);
+  height: calc(var(--joystick-size) * 0.7);
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 94, 196, 0.6);
+  background: radial-gradient(circle, rgba(255, 94, 196, 0.25), rgba(255, 94, 196, 0.06) 70%);
+  box-shadow: 0 0 28px rgba(255, 94, 196, 0.25);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.fire-core {
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffd9f0, var(--magenta) 55%, #8a1560);
+  box-shadow: 0 0 18px rgba(255, 94, 196, 0.7);
+}
+.fire-button.pressed {
+  transform: scale(0.92);
+  box-shadow: 0 0 44px rgba(255, 94, 196, 0.6);
+}

@@ -15,8 +15,8 @@ test('two browsers create and join a co-op room and both see two tanks', async (
   await b.goto('/#/lobby');
   await b.getByTestId('lobby-join-code').fill(code!);
   await b.getByTestId('lobby-join').click();
-  await expect(a.getByTestId('lobby-players')).toContainText(/2 ?\//);
-  await expect(b.getByTestId('lobby-players')).toContainText(/2 ?\//);
+  await expect(a.getByTestId('lobby-players').locator('> *')).toHaveCount(2);
+  await expect(b.getByTestId('lobby-players').locator('> *')).toHaveCount(2);
 
   await a.getByTestId('lobby-start').click();
   await expect(a.getByTestId('game-canvas')).toBeVisible({ timeout: 15_000 });

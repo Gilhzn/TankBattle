@@ -1,0 +1,90 @@
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--glass-glow), var(--shadow);
+}
+.panel {
+  border-radius: var(--radius-l);
+  padding: var(--space-4);
+  margin-block-end: var(--space-4);
+}
+.panel > h2:first-child {
+  margin-block-start: 0;
+}
+
+/* animated menu background: cheap CSS gradient drift + floating sparks */
+.menu-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 20% 20%, rgba(94, 225, 255, 0.14), transparent 60%),
+    radial-gradient(50% 60% at 80% 30%, rgba(255, 94, 196, 0.14), transparent 60%),
+    radial-gradient(60% 50% at 50% 90%, rgba(182, 255, 94, 0.1), transparent 60%),
+    var(--bg);
+  background-size: 200% 200%;
+  animation: bg-drift 24s ease-in-out infinite alternate;
+}
+.menu-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(94, 225, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 225, 255, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 75%);
+}
+.menu-bg .spark {
+  position: absolute;
+  left: calc(var(--i) * 7.3%);
+  bottom: -10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan);
+  opacity: 0;
+  animation: spark-rise calc(9s + var(--i) * 0.9s) linear infinite;
+  animation-delay: calc(var(--i) * -1.3s);
+}
+.menu-bg .spark:nth-child(3n) {
+  background: var(--magenta);
+  box-shadow: 0 0 10px var(--magenta);
+}
+.menu-bg .spark:nth-child(4n) {
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--amber);
+}
+@keyframes bg-drift {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+@keyframes spark-rise {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-110vh) scale(1.2);
+    opacity: 0;
+  }
+}
+html.reduced-motion .menu-bg {
+  animation: none;
+}
+html.reduced-motion .menu-bg .spark {
+  display: none;
+}
