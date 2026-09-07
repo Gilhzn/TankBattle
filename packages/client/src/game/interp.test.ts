@@ -46,6 +46,22 @@ describe('InterpBuffer', () => {
     local.push(snap(30, 0, 0), 1000);
     expect(local.renderTick(1000)).toBe(30);
   });
+  it('smooths a 30 Hz sim across display frames with one tick of delay (solo play)', () => {
+    // What the local host produces: one snapshot per tick, the tank moving a fixed step.
+    const b = new InterpBuffer(1);
+    const TICK = 1000 / 30;
+    b.push(snap(10, 100, 0), 0);
+    b.push(snap(11, 116, 0), TICK);
+
+    // Sampling across the tick must yield strictly increasing intermediate positions rather than
+    // holding one value and jumping — that hold is what read as stutter.
+    const xs = [0, 0.25, 0.5, 0.75].map((f) => b.tankPos(1, b.renderTick(TICK + f * TICK), { x: -1, y: -1 }).x);
+    expect(xs[0]).toBeCloseTo(100, 5);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]).toBeGreaterThan(xs[i - 1]);
+    expect(xs[xs.length - 1]).toBeLessThan(116);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(116);
+  });
+
   it('falls back for entities missing from one side and keeps only the last N frames', () => {
     const b = new InterpBuffer(3, 3);
     for (let t = 0; t < 10; t++) b.push(snap(t * 2, t, t), t);

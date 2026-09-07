@@ -67,7 +67,14 @@ export class LocalGameHost implements GameTransport {
     if (this.timer) return;
     this.last = performance.now();
     this.acc = 0;
-    this.timer = window.setInterval(() => this.loop(), 1000 / 60);
+    // Driven by rAF rather than a timer so ticks — and the snapshots the renderer interpolates
+    // between — line up with display frames instead of drifting against them.
+    const frame = (): void => {
+      if (this.stopped) return;
+      this.loop();
+      this.timer = requestAnimationFrame(frame);
+    };
+    this.timer = requestAnimationFrame(frame);
     // initial snapshot so the view has something to draw before the first tick
     this.emitSnapshot();
   }
@@ -176,7 +183,7 @@ export class LocalGameHost implements GameTransport {
 
   stop(): void {
     this.stopped = true;
-    if (this.timer) window.clearInterval(this.timer);
+    if (this.timer) cancelAnimationFrame(this.timer);
     this.timer = 0;
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.snapshots.clear();
