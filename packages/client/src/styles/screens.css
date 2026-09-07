@@ -1075,3 +1075,192 @@ html[dir='rtl'] .btn.back .chev {
   font-weight: 800;
   color: var(--cyan);
 }
+
+/* ---------- friends ---------- */
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-block-end: 1px solid var(--keyline);
+}
+.friend-row:last-child {
+  border-block-end: none;
+}
+.friend-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-m);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.friend-main:hover,
+.friend-main:focus-visible {
+  background: var(--plate-sunken);
+}
+.friend-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.friend-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-sub {
+  font-size: var(--fs-xs);
+}
+.friend-rating {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--brass);
+}
+.row-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+/* Presence is colour *and* shape: a ring for offline, a filled dot for online, so it does not rely
+   on colour alone. */
+.presence {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--fg-muted);
+}
+.presence.online {
+  background: var(--lime);
+  border-color: var(--lime);
+  box-shadow: 0 0 8px rgba(182, 255, 94, 0.6);
+}
+.presence.in_match {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.6);
+}
+.presence.offline {
+  background: transparent;
+}
+
+/* ---------- profile ---------- */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.profile-id {
+  min-width: 0;
+}
+.profile-name {
+  margin: 0;
+  font-family: var(--font-display);
+}
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-s);
+  margin-block-start: 4px;
+}
+.section-title {
+  font-size: var(--fs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: var(--space-3);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2);
+  border-radius: var(--radius-m);
+  background: var(--plate-sunken);
+  border: 1px solid var(--keyline);
+}
+.stat-value {
+  font-size: var(--fs-l);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.stat.good .stat-value {
+  color: var(--lime);
+}
+.stat.bad .stat-value {
+  color: var(--danger);
+}
+.stat-label {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  text-align: center;
+}
+/* The tier banner is the one loud element on the profile: it is what a player screenshots. */
+.tier-banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-m);
+  margin-block-end: var(--space-3);
+  border: 1px solid var(--keyline);
+  background: linear-gradient(135deg, var(--tier-a, #6b7484), var(--tier-b, #39404d));
+}
+.tier-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-l);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.tier-rating {
+  font-size: var(--fs-xl);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.tier-bronze {
+  --tier-a: #b06b3a;
+  --tier-b: #6a3c1c;
+}
+.tier-silver {
+  --tier-a: #9fb0c4;
+  --tier-b: #5b6a7c;
+}
+.tier-gold {
+  --tier-a: #e6b23c;
+  --tier-b: #8a6412;
+}
+.tier-platinum {
+  --tier-a: #7fd6d0;
+  --tier-b: #2f7a76;
+}
+.tier-diamond {
+  --tier-a: #7fb2ff;
+  --tier-b: #2b4d96;
+}
+.tier-master {
+  --tier-a: #d07fff;
+  --tier-b: #6a2b96;
+}
+.arena-note {
+  margin-block-start: var(--space-3);
+  font-size: var(--fs-s);
+}

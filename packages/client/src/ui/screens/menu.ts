@@ -1,3 +1,4 @@
+import { Api } from '../../app/api.js';
 import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { app, type AppState } from '../../app/store.js';
@@ -17,6 +18,19 @@ export function menuScreen(root: HTMLElement): () => void {
   const profile = h('div', { class: 'profile-chip glass', dataset: { testid: 'profile-chip' } });
   const status = h('div', { class: 'net-status', dataset: { testid: 'net-status' } });
   const giftsBadge = h('span', { class: 'badge', dataset: { testid: 'gifts-badge' } });
+  // Pending friend requests are worth surfacing on the menu: someone is waiting on an answer.
+  const friendsBadge = h('span', { class: 'badge', dataset: { testid: 'friends-badge' } });
+  friendsBadge.hidden = true;
+  const refreshFriendsBadge = async (): Promise<void> => {
+    if (!app.get().online) return;
+    try {
+      const { incoming } = await Api.friends();
+      friendsBadge.textContent = incoming.length ? String(incoming.length) : '';
+      friendsBadge.hidden = incoming.length === 0;
+    } catch {
+      // A badge is not worth surfacing an error over; it simply stays hidden.
+    }
+  };
   const dailyBtn = button(t('menu.daily'), { kind: 'accent', testid: 'menu-daily', className: 'daily-btn', onClick: () => openDailyModal() });
   const installBtn = button(t('menu.install'), { kind: 'ghost', className: 'small', onClick: async () => { await installPrompt?.prompt(); installPrompt = null; installBtn.hidden = true; } });
   installBtn.hidden = !installPrompt;
@@ -66,6 +80,8 @@ export function menuScreen(root: HTMLElement): () => void {
         nav(t('menu.garage'), '/garage', 'menu-garage'),
         nav(t('menu.battlepass'), '/battlepass', 'menu-battlepass'),
         nav(t('menu.gifts'), '/gifts', 'menu-gifts', 'secondary', giftsBadge),
+        nav(t('menu.friends'), '/friends', 'menu-friends', 'secondary', friendsBadge),
+        nav(t('menu.profile'), '/profile', 'menu-profile'),
         nav(t('menu.leaderboard'), '/leaderboard', 'menu-leaderboard'),
         nav(t('menu.settings'), '/settings', 'menu-settings'),
       ),
@@ -85,5 +101,6 @@ export function menuScreen(root: HTMLElement): () => void {
     renderHint(s);
   });
   root.appendChild(el);
+  void refreshFriendsBadge();
   return () => unsub();
 }

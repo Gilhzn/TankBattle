@@ -1,4 +1,5 @@
 import type { BattlePassTier, BoostEffect, CatalogItem } from '@tank/shared';
+import type { FriendDTO, FriendRequestDTO, PresenceDTO, RatingProfileDTO } from '@tank/shared';
 import { app, toast } from './store.js';
 import { settings } from './settings.js';
 import { t } from '../i18n/index.js';
@@ -278,7 +279,63 @@ export const Api = {
   soloResult: (body: SoloResultBody) => api<SoloResultResponse>('POST', '/api/solo/result', body, { timeoutMs: 30000 }),
   leaderboard: (mode: 'solo' | 'coop' | 'versus') => api<{ entries: LeaderEntry[]; me?: LeaderEntry }>('GET', `/api/leaderboard?mode=${mode}`),
   health: () => api<{ ok: true; uptime: number; rooms: number; players: number }>('GET', '/api/health', undefined, { auth: false, timeoutMs: 4000 }),
+
+  // ---------- accounts ----------
+  authMethods: () => api<{ google: boolean; googleClientId: string | null; email: boolean; emailDelivers: boolean }>('GET', '/api/auth/methods', undefined, { auth: false }),
+  googleSignIn: (idToken: string, country?: string) => api<AuthResult>('POST', '/api/auth/google', { idToken, ...(country ? { country } : {}) }),
+  emailStart: (email: string, lang: 'en' | 'he') => api<{ sent: true; expiresAt: number }>('POST', '/api/auth/email/start', { email, lang }),
+  emailVerify: (email: string, code: string, country?: string) => api<AuthResult>('POST', '/api/auth/email/verify', { email, code, ...(country ? { country } : {}) }),
+  nicknameCheck: (nickname: string) => api<{ available: boolean; reason?: string }>('GET', `/api/auth/nickname?nickname=${encodeURIComponent(nickname)}`, undefined, { auth: false }),
+  account: () => api<{ user: UserDTO; identities: Array<{ provider: string; email: string; createdAt: number }>; registered: boolean }>('GET', '/api/me/account'),
+
+  // ---------- friends ----------
+  friends: () => api<{ friends: FriendDTO[]; incoming: FriendRequestDTO[]; outgoing: FriendRequestDTO[] }>('GET', '/api/friends'),
+  friendRequest: (nickname: string) => api<{ status: 'sent' | 'accepted'; request?: FriendRequestDTO; friend?: FriendDTO }>('POST', '/api/friends/request', { nickname }),
+  friendAccept: (id: string) => api<{ friend: FriendDTO }>('POST', `/api/friends/requests/${encodeURIComponent(id)}/accept`),
+  friendDecline: (id: string) => api<{ ok: true }>('POST', `/api/friends/requests/${encodeURIComponent(id)}/decline`),
+  friendCancel: (id: string) => api<{ ok: true }>('POST', `/api/friends/requests/${encodeURIComponent(id)}/cancel`),
+  friendRemove: (id: string) => api<{ ok: true }>('DELETE', `/api/friends/${encodeURIComponent(id)}`),
+  friendInvite: () => api<{ code: string; url: string; whatsappUrl: string; text: string; expiresAt: number }>('GET', '/api/friends/invite'),
+  friendInviteAccept: (code: string) => api<{ status: string; nickname: string }>('POST', '/api/friends/invite/accept', { code }),
+
+  // ---------- profile & ladder ----------
+  myProfile: () => api<PlayerProfileDTO>('GET', '/api/me/profile'),
+  playerProfile: (id: string) => api<PlayerProfileDTO>('GET', `/api/players/${encodeURIComponent(id)}/profile`),
+  playerByNickname: (nickname: string) => api<PlayerProfileDTO>('GET', `/api/players/by-nickname/${encodeURIComponent(nickname)}`),
+  rankedBoard: (scope: 'world' | 'country', limit = 50) =>
+    api<{ scope: string; country: string; entries: RankedEntry[]; me: RatingProfileDTO }>('GET', `/api/ranked/leaderboard?scope=${scope}&limit=${limit}`),
 };
+
+export interface AuthResult {
+  token: string;
+  user: UserDTO;
+  isNew: boolean;
+  needsNickname: boolean;
+}
+
+export interface RankedEntry {
+  position: number;
+  userId: string;
+  nickname: string;
+  country: string;
+  rating: number;
+  tier: string;
+  wins: number;
+  losses: number;
+}
+
+export interface PlayerProfileDTO {
+  id: string;
+  nickname: string;
+  skin: string;
+  country: string;
+  createdAt: number;
+  presence: PresenceDTO;
+  rating: RatingProfileDTO;
+  stats: { matches: number; bestScore: number; bestStage: number; kills: number };
+  isFriend: boolean;
+  isSelf: boolean;
+}
 
 // ---------- offline result queue ----------
 const PENDING_KEY = 'tank1990.pendingResults';

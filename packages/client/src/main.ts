@@ -21,6 +21,9 @@ import { garageScreen } from './ui/screens/garage.js';
 import { battlepassScreen } from './ui/screens/battlepass.js';
 import { giftsScreen } from './ui/screens/gifts.js';
 import { leaderboardScreen } from './ui/screens/leaderboard.js';
+import { friendsScreen } from './ui/screens/friends.js';
+import { profileScreen } from './ui/screens/profile.js';
+import { inviteScreen } from './ui/screens/invite.js';
 import { settingsScreen } from './ui/screens/settings.js';
 
 const rootEl = document.getElementById('app')!;
@@ -40,6 +43,10 @@ route('/garage', 'garage', garageScreen);
 route('/battlepass', 'battlepass', battlepassScreen);
 route('/gifts', 'gifts', giftsScreen);
 route('/leaderboard', 'leaderboard', leaderboardScreen);
+route('/friends', 'friends', friendsScreen);
+route('/profile', 'profile', profileScreen);
+route('/player/:nickname', 'profile', profileScreen);
+route('/invite/:code', 'invite', inviteScreen);
 route('/settings', 'settings', settingsScreen);
 setNotFound((root) => {
   root.appendChild(h('div', { class: 'center' }, h('p', null, '404'), h('button', { class: 'btn primary', type: 'button', onclick: () => navigate('/') }, t('common.menu'))));
