@@ -19,11 +19,14 @@ export function garageScreen(root: HTMLElement): () => void {
   const boostsEl = h('div', { class: 'chip-grid' });
   const loadoutEl = h('div', { class: 'chip-grid', dataset: { testid: 'garage-loadout' } });
 
+  /** The preview is the screen's hero, but at a fixed 160px it swallowed a phone. */
+  const previewSize = (): number => Math.max(96, Math.min(160, Math.round(Math.min(window.innerWidth, 520) * 0.34)));
+
   const renderPreview = (): void => {
     clear(previewBox);
     const pal = SKINS[previewSkin] ?? SKINS.default;
     previewBox.style.setProperty('--glow', pal.glow);
-    previewBox.append(tankPreview(previewSkin, 160, { animate: true, tier: 1 }), h('div', { class: 'preview-name' }, previewSkin === 'default' ? t('garage.default') : displayName(previewSkin)));
+    previewBox.append(tankPreview(previewSkin, previewSize(), { animate: true, tier: 1 }), h('div', { class: 'preview-name' }, previewSkin === 'default' ? t('garage.default') : displayName(previewSkin)));
   };
 
   const equip = async (sku: string): Promise<void> => {

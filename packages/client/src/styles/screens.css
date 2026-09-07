@@ -41,7 +41,7 @@
   margin-inline-start: 4px;
 }
 html[dir='rtl'] .btn.back .chev {
-  transform: rotate(-135deg);
+  transform: rotate(-45deg);
   margin-inline-start: 0;
   margin-inline-end: 4px;
 }
@@ -838,7 +838,7 @@ html[dir='rtl'] .btn.back .chev {
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-4);
+  padding: var(--space-3);
   border-radius: var(--radius);
   background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--glow, var(--cyan)) 25%, transparent), transparent 65%);
 }

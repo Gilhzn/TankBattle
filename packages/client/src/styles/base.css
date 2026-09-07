@@ -438,8 +438,12 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
 }
 .chip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--space-2);
+}
+/* An empty state describes the whole section, so it spans the grid rather than sitting in one cell. */
+.chip-grid > .empty {
+  grid-column: 1 / -1;
 }
 .chip-btn {
   display: flex;
@@ -448,8 +452,9 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
   min-height: var(--tap);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-s);
-  border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.04);
+  border: var(--stroke) solid var(--keyline);
+  background: var(--plate-raised);
+  box-shadow: inset 0 1px 0 var(--bevel-soft), 0 2px 0 rgba(0, 0, 0, 0.35);
   text-align: start;
   color: var(--fg);
 }
@@ -458,7 +463,8 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
 }
 .chip-btn.selected {
   border-color: var(--cyan);
-  background: rgba(94, 225, 255, 0.12);
+  background: linear-gradient(180deg, rgba(94, 225, 255, 0.22), rgba(94, 225, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 0 var(--cyan-edge);
 }
 .chip-btn.previewing {
   outline: 1px dashed rgba(94, 225, 255, 0.5);
