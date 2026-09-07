@@ -42,15 +42,46 @@ export const CATALOG: CatalogItem[] = [
 
 export const CATALOG_BY_SKU: Record<string, CatalogItem> = Object.fromEntries(CATALOG.map((i) => [i.sku, i]));
 
-export const SKINS: Record<string, { name: string; primary: string; secondary: string; glow: string }> = {
-  default: { name: 'Standard', primary: '#ffd166', secondary: '#f4a261', glow: '#ffe08a' },
-  skin_neon_viper: { name: 'Neon Viper', primary: '#7cff4a', secondary: '#1c9c3a', glow: '#b8ff8a' },
-  skin_gold_ingot: { name: 'Gold Ingot', primary: '#ffcc33', secondary: '#c98a00', glow: '#fff1a8' },
-  skin_void: { name: 'Void Walker', primary: '#8a5cff', secondary: '#3a1c8c', glow: '#c7aaff' },
-  skin_ember: { name: 'Ember', primary: '#ff7a3d', secondary: '#c0341a', glow: '#ffb38a' },
-  p2: { name: 'Ally', primary: '#5ee1ff', secondary: '#1f8bb3', glow: '#a8f0ff' },
-  p3: { name: 'Ally', primary: '#ff5ec4', secondary: '#a8177a', glow: '#ffa8e2' },
-  p4: { name: 'Ally', primary: '#b6ff5e', secondary: '#5aa81e', glow: '#e0ffb0' },
+/**
+ * Chassis silhouette used by the sprite factory. Purely cosmetic — the simulation hitbox is always
+ * the same 16x16 logical box. Pricier skins get more elaborate outlines:
+ * standard (free) < stealth (300) < heavy (400) < phantom (600) < elite (800).
+ * The `grunt`/`scout`/`brute`/`bulwark` shapes are reserved for AI tanks so enemies never share a
+ * silhouette with a player chassis.
+ */
+export type TankShape =
+  | 'standard'
+  | 'heavy'
+  | 'stealth'
+  | 'phantom'
+  | 'elite'
+  | 'grunt'
+  | 'scout'
+  | 'brute'
+  | 'bulwark';
+
+export interface SkinDef {
+  name: string;
+  primary: string;
+  secondary: string;
+  glow: string;
+  shape: TankShape;
+}
+
+/**
+ * Player chassis palettes. These are deliberately kept to saturated "team" hues (gold, cyan,
+ * magenta, violet, acid green) — the AI palettes in the client live in a separate, desaturated
+ * "hostile metal" family so a player is never mistaken for an enemy.
+ */
+export const SKINS: Record<string, SkinDef> = {
+  default: { name: 'Standard', primary: '#ffd166', secondary: '#e08a2e', glow: '#ffe08a', shape: 'standard' },
+  skin_neon_viper: { name: 'Neon Viper', primary: '#8dff3a', secondary: '#17a83c', glow: '#c6ff8a', shape: 'stealth' },
+  skin_gold_ingot: { name: 'Gold Ingot', primary: '#ffcc33', secondary: '#b87800', glow: '#fff1a8', shape: 'elite' },
+  skin_void: { name: 'Void Walker', primary: '#a274ff', secondary: '#3a1c8c', glow: '#d3bcff', shape: 'phantom' },
+  skin_ember: { name: 'Ember', primary: '#ff7a3d', secondary: '#b52d12', glow: '#ffb38a', shape: 'heavy' },
+  p2: { name: 'Ally', primary: '#3fe0ff', secondary: '#0d7fa8', glow: '#a8f0ff', shape: 'standard' },
+  p3: { name: 'Ally', primary: '#ff4fc0', secondary: '#a8177a', glow: '#ffa8e2', shape: 'standard' },
+  p4: { name: 'Ally', primary: '#b06bff', secondary: '#5c22b8', glow: '#dcb8ff', shape: 'standard' },
 };
 
 export interface BattlePassTier {

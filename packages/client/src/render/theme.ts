@@ -1,4 +1,4 @@
-import { SKINS, type TankKind } from '@tank/shared';
+import { SKINS, type TankKind, type TankShape } from '@tank/shared';
 
 export const COLORS = {
   bg: '#07090f',
@@ -24,24 +24,35 @@ export const COLORS = {
   treesLight: '#5ee97a',
   treesDark: '#0c3f22',
   base: '#ffd166',
+  baseLight: '#fff0b8',
   baseDark: '#7a5a12',
   bulletPlayer: '#fff7d6',
   bulletEnemy: '#ffb4e6',
+  /** Hostile optic lens shared by every AI chassis. */
+  enemyEye: '#ff3b30',
 } as const;
 
 export interface Palette {
   primary: string;
   secondary: string;
   glow: string;
+  /** Chassis silhouette. Missing = 'standard' (older callers). */
+  shape?: TankShape;
 }
 
+/**
+ * AI palettes. Deliberately a *separate colour family* from the player skins: desaturated
+ * hostile metal — gunmetal, sand-rust, oxide and sickly olive — so no enemy ever reads as a
+ * team colour. Player skins own the saturated hues (gold / cyan / magenta / violet).
+ */
 const ENEMY_PALETTES: Record<Exclude<TankKind, 'player'>, Palette> = {
-  basic: { primary: '#c3cad6', secondary: '#6b7484', glow: '#e6ebf3' },
-  fast: { primary: '#6fd8e8', secondary: '#2a7f95', glow: '#a9f2ff' },
-  power: { primary: '#ff9a3d', secondary: '#b5501a', glow: '#ffc88a' },
-  armor: { primary: '#63d97a', secondary: '#237a3b', glow: '#a8ffb8' },
+  basic: { primary: '#8c96a8', secondary: '#333a47', glow: '#aeb8c8', shape: 'grunt' },
+  fast: { primary: '#a8916a', secondary: '#41341d', glow: '#c9b492', shape: 'scout' },
+  power: { primary: '#b5563a', secondary: '#511d13', glow: '#dd8f6f', shape: 'brute' },
+  armor: { primary: '#7f9440', secondary: '#2f3a15', glow: '#b3c977', shape: 'bulwark' },
 };
 
+/** Slot -> default skin. A player without a custom skin always wears their slot's team colour. */
 const ALLY_SKINS = ['default', 'p2', 'p3', 'p4'];
 
 export function hexToRgb(hex: string): [number, number, number] {
@@ -70,11 +81,16 @@ export function tankPalette(kind: TankKind, owner: number, skin: string, hp: num
   const p = ENEMY_PALETTES[kind];
   if (kind === 'armor' && maxHp > 1) {
     const damage = 1 - Math.max(0, Math.min(1, (hp - 1) / (maxHp - 1)));
-    return { primary: mixHex(p.primary, '#ff4a4a', damage), secondary: mixHex(p.secondary, '#8a1010', damage), glow: mixHex(p.glow, '#ff9a9a', damage) };
+    return {
+      primary: mixHex(p.primary, '#b8342a', damage),
+      secondary: mixHex(p.secondary, '#4a0f0a', damage),
+      glow: mixHex(p.glow, '#e08a80', damage),
+      shape: p.shape,
+    };
   }
   return p;
 }
 
 export function paletteKey(p: Palette): string {
-  return `${p.primary}${p.secondary}`;
+  return `${p.primary}${p.secondary}${p.shape ?? 'standard'}`;
 }

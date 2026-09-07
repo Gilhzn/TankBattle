@@ -38,6 +38,10 @@ declare global {
       mode: 'local' | 'online';
       screen: string;
       input: (dir: number, fire: boolean) => void;
+      /** Interpolated position actually drawn for a tank right now (test/diagnostic hook; only during a match). */
+      renderPos?: (id: number) => { x: number; y: number; rt: number } | null;
+      /** Playout diagnostics: effective delay in ticks, measured jitter, buffered frames. */
+      interpStats?: () => { delay: number; jitterMs: number; renderTick: number; latestTick: number; frames: number };
     };
   }
 }
@@ -74,8 +78,9 @@ export class GameView {
     // The simulation is a fixed 30 Hz, so rendering its latest state directly shows each position
     // for two or more display frames and reads as stutter. One tick of delay lets the renderer
     // interpolate between the last two states, which costs ~33 ms of latency and buys smooth motion
-    // at any refresh rate. Online needs a deeper buffer to absorb jitter between 15 Hz snapshots.
-    this.interp = new InterpBuffer(tr.mode === 'local' ? 1 : 3, 8);
+    // at any refresh rate. Online starts from 3 ticks (100 ms, 1.5 snapshot intervals) and the buffer
+    // grows itself from there when the link is jittery, so it needs room for more history.
+    this.interp = new InterpBuffer(tr.mode === 'local' ? 1 : 3, tr.mode === 'local' ? 6 : 14);
     this.effects = new Effects(() => settings.get().reducedMotion);
     this.canvas = h('canvas', { class: 'game-canvas', dataset: { testid: 'game-canvas' }, attrs: { 'aria-label': 'battlefield' } });
     this.renderer = new Renderer(this.canvas);
@@ -130,6 +135,14 @@ export class GameView {
         if (dir === -1 && !fire) this.input.setOverride(null);
         else this.input.setOverride({ dir: dir as 0 | 1 | 2 | 3 | -1, fire });
       },
+      renderPos: (id) => {
+        const tank = this.view.tanks.find((t) => t[0] === id);
+        if (!tank) return null;
+        const rt = this.interp.renderTick(performance.now());
+        const p = this.interp.tankPos(id, rt, { x: tank[3], y: tank[4] });
+        return { x: p.x, y: p.y, rt };
+      },
+      interpStats: () => this.interp.stats,
     };
   }
 

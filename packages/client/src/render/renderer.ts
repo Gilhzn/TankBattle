@@ -4,9 +4,9 @@ import {
 } from '@tank/shared';
 import type { InterpBuffer } from '../game/interp.js';
 import type { Effects } from './effects.js';
-import { COLORS, paletteKey, rgba, tankPalette } from './theme.js';
+import { COLORS, paletteKey, rgba, tankPalette, type Palette } from './theme.js';
 import {
-  POWERUP_COLORS, SpriteCache, ctxOf, drawBase, drawBulletSprite, drawGlow, drawPowerUpGlyph, drawTankSprite, drawTile, makeCanvas, roundRect,
+  POWERUP_COLORS, SpriteCache, ctxOf, drawBase, drawBulletSprite, drawGlow, drawPlayerMarker, drawPowerUpGlyph, drawTankSprite, drawTile, makeCanvas, roundRect,
   type AnyCanvas,
 } from './sprites.js';
 
@@ -17,6 +17,18 @@ export interface RenderOptions {
 }
 
 const MAX_DPR = 2;
+const HALF_PI = Math.PI / 2;
+const TAU = Math.PI * 2;
+/**
+ * Time constant of the visual hull rotation. The eased angle covers ~95 % of a turn in 110 ms and
+ * is visually settled by ~130 ms — the simulation itself stays strictly 4-directional.
+ */
+const TURN_TAU_MS = 36;
+
+/** Shortest signed angular difference, in (-PI, PI]. */
+function angleDelta(from: number, to: number): number {
+  return ((((to - from) % TAU) + TAU + Math.PI) % TAU) - Math.PI;
+}
 
 /** Canvas 2D renderer. Logical units are simulation sub-pixels (FIELD = 1664) mapped by `scale`. */
 export class Renderer {
@@ -28,6 +40,10 @@ export class Renderer {
   private tilesValid = false;
   private waterTiles: number[] = [];
   private hasTrees = false;
+  /** Eased render angle per tank id (visual only). Entries are pruned when a tank disappears. */
+  private angles = new Map<number, { a: number; seen: number }>();
+  private frameSeq = 0;
+  private lastTime = 0;
   size = 0; // device px (square)
   scale = 1;
   dpr = 1;
@@ -150,15 +166,43 @@ export class Renderer {
     ctx.restore();
   }
 
-  private tankSprite(kind: TankDTO[2], owner: number, skin: string, hp: number, maxHp: number, frame: number, tier: number): AnyCanvas {
-    const palette = tankPalette(kind, owner, skin, hp, maxHp);
+  private tankSprite(palette: Palette, isPlayer: boolean, frame: number, tier: number): AnyCanvas {
     const bodyPx = TANK_SIZE * this.scale;
     const size = Math.ceil(bodyPx / 0.8);
-    const key = `tank|${paletteKey(palette)}|${frame}|${tier}|${kind === 'player' ? 1 : 0}`;
-    return this.sprites.get(key, size, size, (c, w) => drawTankSprite(c, w, { palette, frame, tier, isPlayer: kind === 'player' }));
+    const key = `tank|${paletteKey(palette)}|${frame}|${tier}|${isPlayer ? 1 : 0}`;
+    return this.sprites.get(key, size, size, (c, w) => drawTankSprite(c, w, { palette, frame, tier, isPlayer }));
   }
 
-  private drawTanks(view: ViewState, interp: InterpBuffer, rt: number, time: number): void {
+  /**
+   * Eased hull angle for a tank. The logical facing snaps (the sim is 4-directional); the drawn
+   * angle chases it the short way round so a turn reads as the hull rotating.
+   */
+  private tankAngle(id: number, dir: number, dt: number, reduced: boolean): number {
+    const target = dir * HALF_PI;
+    let e = this.angles.get(id);
+    if (!e) {
+      e = { a: target, seen: this.frameSeq };
+      this.angles.set(id, e);
+      return target;
+    }
+    e.seen = this.frameSeq;
+    if (reduced || dt <= 0) {
+      e.a = target;
+      return target;
+    }
+    const d = angleDelta(e.a, target);
+    if (Math.abs(d) < 0.002) e.a = target;
+    else e.a += d * (1 - Math.exp(-dt / TURN_TAU_MS));
+    e.a = ((e.a % TAU) + TAU) % TAU;
+    return e.a;
+  }
+
+  /** Drops angle state for tanks that were not drawn this frame, so the map cannot grow unbounded. */
+  private pruneAngles(): void {
+    for (const [id, e] of this.angles) if (e.seen !== this.frameSeq) this.angles.delete(id);
+  }
+
+  private drawTanks(view: ViewState, interp: InterpBuffer, rt: number, time: number, dt: number, opts: RenderOptions): void {
     const ctx = this.ctx;
     const s = this.scale;
     const half = (TANK_SIZE * s) / 2;
@@ -175,14 +219,20 @@ export class Renderer {
         ctx.restore();
         continue;
       }
+      const isPlayer = kind === 'player';
       const moving = (flags & TankFlag.MOVING) !== 0;
       const frame = moving ? Math.floor(time / 90) % 2 : 0;
-      const sprite = this.tankSprite(kind, owner, skin, hp, maxHp, frame, kind === 'player' ? tier : 0);
+      const palette = tankPalette(kind, owner, skin, hp, maxHp);
+      const sprite = this.tankSprite(palette, isPlayer, frame, isPlayer ? tier : 0);
       const sw = sprite.width;
       ctx.save();
-      ctx.rotate((dir * Math.PI) / 2);
+      ctx.rotate(this.tankAngle(id, dir, dt, opts.reducedMotion));
       ctx.drawImage(sprite, -sw / 2, -sw / 2);
       ctx.restore();
+      if (isPlayer) {
+        const pulse = opts.reducedMotion ? 1 : 0.5 + 0.5 * Math.sin(time / 260);
+        drawPlayerMarker(ctx, half, palette.glow, owner === opts.mySlot, pulse);
+      }
       if (flags & TankFlag.FROZEN) {
         ctx.fillStyle = rgba(COLORS.cyan, 0.32);
         roundRect(ctx, -half, -half, half * 2, half * 2, half * 0.3);
@@ -202,9 +252,10 @@ export class Renderer {
         ctx.arc(0, 0, half * 1.05, 0, Math.PI * 2);
         ctx.stroke();
       }
-      if (flags & TankFlag.SHIELD) this.drawShield(time, half, kind === 'player' ? COLORS.cyan : COLORS.lime);
+      if (flags & TankFlag.SHIELD) this.drawShield(time, half, isPlayer ? COLORS.cyan : COLORS.lime);
       ctx.restore();
     }
+    this.pruneAngles();
   }
 
   private drawSpawnStar(time: number, half: number): void {
@@ -332,6 +383,9 @@ export class Renderer {
     const size = this.size;
     if (this.tilesChanged(view.tiles)) this.rebuildTiles(view.tiles);
     const rt = interp.renderTick(time);
+    const dt = this.lastTime ? Math.min(120, Math.max(0, time - this.lastTime)) : 0;
+    this.lastTime = time;
+    this.frameSeq++;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = COLORS.bg;
@@ -341,7 +395,7 @@ export class Renderer {
 
     if (this.tileLayer) ctx.drawImage(this.tileLayer, 0, 0);
     this.drawWater(time);
-    this.drawTanks(view, interp, rt, time);
+    this.drawTanks(view, interp, rt, time, dt, opts);
     this.drawBullets(view, interp, rt);
     effects.draw(ctx, this.scale, Math.max(10, TILE * this.scale * 0.7));
     if (this.hasTrees && this.treesLayer) {
