@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.data/
+*.db
+*.db-journal
+test-results/
+playwright-report/
+.playwright/
+.env
+.DS_Store
+packages/client/public/icons/*.png

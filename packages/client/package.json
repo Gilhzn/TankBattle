@@ -1,0 +1,18 @@
+{
+  "name": "@tank/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../scripts/gen-icons.mjs && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tank/shared": "*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}
