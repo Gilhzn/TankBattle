@@ -1,0 +1,30 @@
+# Render blueprint for the full game, multiplayer included.
+# Render keeps a long-running Node process and proxies WebSockets, which the game server needs.
+#
+# Persistence: the free plan has no persistent disk, so accounts and wallets reset when the
+# service restarts. To keep them, move to a paid instance and uncomment the `disk` block below —
+# DB_PATH already points at its mount path.
+services:
+  - type: web
+    name: tank1990
+    runtime: node
+    plan: free
+    healthCheckPath: /api/health
+    buildCommand: npm ci && npm run build -w @tank/shared && npm run build -w @tank/server && npm run build -w @tank/client
+    startCommand: node packages/server/dist/index.js
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Signs the guest session tokens; Render generates it once and keeps it across deploys.
+      - key: SECRET
+        generateValue: true
+      # Relative to the service's working directory, which is writable on every plan.
+      # When enabling the disk below, change this to /var/data/tank.db.
+      - key: DB_PATH
+        value: .data/tank.db
+    # disk:
+    #   name: data
+    #   mountPath: /var/data
+    #   sizeGB: 1

@@ -45,12 +45,18 @@ docs/API.md       REST + WebSocket contract
 
 Vercel runs serverless functions, which cannot hold the long-lived WebSocket connections the game server needs — so a Vercel deployment serves the client only. Solo play, all 12 stages, power-ups, touch controls and the full UI work there; multiplayer, the store, battle pass and gifting stay in their offline state because there is no server behind them.
 
-**Full game, multiplayer included.** `packages/server` is a long-running Node process (WebSocket + REST + SQLite) and needs a host that keeps a process alive — Render, Railway, Fly.io, or any VPS. It serves the built client itself, so one service covers everything:
+**Full game, multiplayer included.** `packages/server` is a long-running Node process (WebSocket + REST + SQLite) and needs a host that keeps a process alive — Render, Railway, Fly.io, or any VPS. It serves the built client itself, so one service covers everything.
 
-```bash
-npm ci && npm run build
-PORT=8080 SECRET=<a long random string> DB_PATH=.data/tank.db npm start
-```
+- **Render** — `render.yaml` is a blueprint: point Render at the repo, and it installs, builds, starts the server, health-checks `/api/health` and generates `SECRET`. The free plan has no persistent disk, so accounts and wallets reset when the service restarts; the blueprint has a commented `disk` block to enable on a paid instance (switch `DB_PATH` to `/var/data/tank.db` at the same time).
+- **Railway / Fly.io / any Docker host** — the `Dockerfile` builds all three packages and runs the server as a non-root user. Mount a volume at `/data` to keep the database, which `DB_PATH` already points at.
+- **Anywhere else**
+
+  ```bash
+  npm ci && npm run build
+  PORT=8080 SECRET=<a long random string> DB_PATH=.data/tank.db npm start
+  ```
+
+`SECRET` signs guest session tokens: set it explicitly, or every restart invalidates existing sessions. The server binds all interfaces and reads `PORT`, so it works behind any platform's proxy; WebSockets are served on the same port at `/ws`.
 
 ## Tests
 ```bash
