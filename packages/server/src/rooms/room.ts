@@ -1,0 +1,275 @@
+import { MAX_PLAYERS, type RoomPlayerInfo, type RoomStateMessage, type RoomStatus, type ServerMessage } from '@tank/shared';
+import type { GameRunner } from '../game/runner.js';
+import { newNonce } from '../util/ids.js';
+import type { Logger } from '../util/log.js';
+import type { Clock } from '../util/time.js';
+import { RoomError, type PlayerLink, type RoomUser } from './types.js';
+
+export const DISCONNECT_GRACE_MS = 30_000;
+export const EMPTY_ROOM_TTL_MS = 60_000;
+
+export interface RoomPlayer {
+  id: string;
+  name: string;
+  skin: string;
+  slot: number;
+  ready: boolean;
+  connected: boolean;
+  loadout: string[];
+  resumeToken: string;
+  link: PlayerLink | null;
+  disconnectTimer: NodeJS.Timeout | null;
+}
+
+export interface RoomDeps {
+  clock: Clock;
+  log: Logger;
+  countdownMs: number;
+  disconnectGraceMs?: number;
+  emptyTtlMs?: number;
+  createRunner(room: Room): GameRunner;
+  /** Called once the room has been empty for the TTL (or is destroyed). */
+  onEmpty(room: Room): void;
+}
+
+/** A lobby + (optionally) a running match. All mutations broadcast `roomState`. */
+export class Room {
+  status: RoomStatus = 'lobby';
+  hostId = '';
+  players: RoomPlayer[] = [];
+  runner: GameRunner | null = null;
+  countdownEndsAt: number | undefined;
+  /** When the lobby gained its 2nd player (quick-play auto-start timer). */
+  pairedSince: number | null = null;
+  readonly createdAt: number;
+  private countdownTimer: NodeJS.Timeout | null = null;
+  private emptyTimer: NodeJS.Timeout | null = null;
+  private destroyed = false;
+
+  constructor(
+    readonly id: string,
+    readonly code: string,
+    readonly mode: 'coop' | 'versus',
+    readonly isPrivate: boolean,
+    readonly quickPlay: boolean,
+    private readonly deps: RoomDeps,
+  ) {
+    this.createdAt = deps.clock();
+    this.armEmptyTimer();
+  }
+
+  get size(): number {
+    return this.players.length;
+  }
+  get isFull(): boolean {
+    return this.players.length >= MAX_PLAYERS;
+  }
+  get joinable(): boolean {
+    return !this.destroyed && this.status === 'lobby' && !this.isFull;
+  }
+
+  player(userId: string): RoomPlayer | undefined {
+    return this.players.find((p) => p.id === userId);
+  }
+
+  /** Lobby-only join. Throws RoomError('room_full' | 'in_progress'). */
+  join(user: RoomUser, link: PlayerLink, loadout: string[]): RoomPlayer {
+    if (this.destroyed) throw new RoomError('room_closed', 'room no longer exists');
+    const existing = this.player(user.id);
+    if (existing) {
+      this.attach(existing, link);
+      this.broadcastState();
+      return existing;
+    }
+    if (this.status !== 'lobby') throw new RoomError('in_progress', 'game already in progress');
+    if (this.isFull) throw new RoomError('room_full', 'room is full');
+    const used = new Set(this.players.map((p) => p.slot));
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    const p: RoomPlayer = { id: user.id, name: user.name, skin: user.skin, slot, ready: false, connected: true, loadout: [...loadout], resumeToken: newNonce(18), link, disconnectTimer: null };
+    this.players.push(p);
+    this.players.sort((a, b) => a.slot - b.slot);
+    if (!this.hostId) this.hostId = p.id;
+    if (this.players.length >= 2 && this.pairedSince === null) this.pairedSince = this.deps.clock();
+    this.clearEmptyTimer();
+    this.broadcastState();
+    return p;
+  }
+
+  /** Removes a player (mid-game too). Transfers host; schedules deletion when empty. */
+  leave(userId: string): boolean {
+    const p = this.player(userId);
+    if (!p) return false;
+    if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    this.players = this.players.filter((x) => x !== p);
+    if (this.runner) this.runner.removePlayer(p.slot);
+    if (this.hostId === p.id) this.hostId = this.players[0]?.id ?? '';
+    if (this.players.length < 2) this.pairedSince = null;
+    if (this.players.length === 0) {
+      this.cancelCountdown();
+      if (this.runner) {
+        this.runner.stop();
+        this.runner = null;
+        this.status = 'lobby';
+      }
+      this.armEmptyTimer();
+    }
+    this.broadcastState();
+    return true;
+  }
+
+  /** Keeps the seat for a grace period; the runner stops reading the player's input meanwhile. */
+  disconnect(userId: string): void {
+    const p = this.player(userId);
+    if (!p) return;
+    p.connected = false;
+    p.link = null;
+    this.runner?.clearInput(p.slot);
+    if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    p.disconnectTimer = setTimeout(() => {
+      p.disconnectTimer = null;
+      this.leave(p.id);
+    }, this.deps.disconnectGraceMs ?? DISCONNECT_GRACE_MS);
+    this.broadcastState();
+  }
+
+  /** Re-attaches a returning player when the resume token matches. */
+  resume(userId: string, resumeToken: string, link: PlayerLink): RoomPlayer {
+    const p = this.player(userId);
+    if (!p || p.resumeToken !== resumeToken) throw new RoomError('bad_resume', 'cannot resume: unknown player or token');
+    this.attach(p, link);
+    this.broadcastState();
+    if (this.runner) this.runner.sendFull(p);
+    return p;
+  }
+
+  private attach(p: RoomPlayer, link: PlayerLink): void {
+    if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    p.disconnectTimer = null;
+    p.link = link;
+    p.connected = true;
+  }
+
+  setReady(userId: string, ready: boolean): void {
+    const p = this.player(userId);
+    if (!p) return;
+    p.ready = ready;
+    this.broadcastState();
+    this.maybeAutoStart();
+  }
+
+  setLoadout(userId: string, loadout: string[]): void {
+    const p = this.player(userId);
+    if (!p || this.status !== 'lobby') return;
+    p.loadout = [...loadout];
+    this.broadcastState();
+  }
+
+  chat(userId: string, text: string): void {
+    const p = this.player(userId);
+    if (!p) return;
+    this.broadcast({ type: 'chat', from: p.id, name: p.name, text });
+  }
+
+  /** Host-initiated (or automatic) start: countdown then `gameStart`. */
+  start(byUserId?: string): void {
+    if (this.status !== 'lobby') throw new RoomError('not_in_lobby', 'game already started');
+    if (byUserId !== undefined && byUserId !== this.hostId) throw new RoomError('not_host', 'only the host can start');
+    if (this.players.length === 0) throw new RoomError('empty_room');
+    this.status = 'countdown';
+    this.countdownEndsAt = this.deps.clock() + this.deps.countdownMs;
+    this.countdownTimer = setTimeout(() => {
+      this.countdownTimer = null;
+      this.begin();
+    }, this.deps.countdownMs);
+    this.broadcastState();
+  }
+
+  /** Quick-play lobbies start on their own: 4 players, everyone ready, or 2+ players for a while. */
+  maybeAutoStart(now = this.deps.clock(), waitMs = 10_000): void {
+    if (!this.quickPlay || this.status !== 'lobby' || this.players.length === 0) return;
+    const connected = this.players.filter((p) => p.connected);
+    if (connected.length < 2) return;
+    const allReady = connected.every((p) => p.ready);
+    const waited = this.pairedSince !== null && now - this.pairedSince >= waitMs;
+    if (this.isFull || allReady || waited) this.start();
+  }
+
+  private begin(): void {
+    if (this.destroyed || this.players.length === 0) return;
+    // Compact seats so slot i === state.players[i].
+    this.players.sort((a, b) => a.slot - b.slot).forEach((p, i) => (p.slot = i));
+    this.status = 'playing';
+    this.countdownEndsAt = undefined;
+    this.broadcastState();
+    try {
+      this.runner = this.deps.createRunner(this);
+      this.runner.start();
+    } catch (err) {
+      this.deps.log.error(`room ${this.code}: failed to start game`, err);
+      this.runner = null;
+      this.status = 'lobby';
+      this.broadcastState();
+    }
+  }
+
+  /** The runner calls this after it has delivered `gameOver` + `walletUpdate`. */
+  onGameOver(): void {
+    this.runner = null;
+    this.status = 'lobby';
+    this.pairedSince = this.players.length >= 2 ? this.deps.clock() : null;
+    for (const p of this.players) p.ready = false;
+    this.broadcastState();
+  }
+
+  stateFor(playerId: string | null): RoomStateMessage {
+    const players: RoomPlayerInfo[] = this.players.map((p) => ({
+      id: p.id, name: p.name, slot: p.slot, ready: p.ready, connected: p.connected, loadout: [...p.loadout], skin: p.skin, isHost: p.id === this.hostId,
+    }));
+    const msg: RoomStateMessage = { type: 'roomState', roomId: this.id, code: this.code, mode: this.mode, isPrivate: this.isPrivate, status: this.status, hostId: this.hostId, players };
+    if (this.countdownEndsAt !== undefined) msg.countdownEndsAt = this.countdownEndsAt;
+    const me = playerId ? this.player(playerId) : undefined;
+    if (me) msg.resumeToken = me.resumeToken;
+    return msg;
+  }
+
+  broadcastState(): void {
+    for (const p of this.players) p.link?.send(this.stateFor(p.id));
+  }
+
+  broadcast(msg: ServerMessage, except?: string): void {
+    for (const p of this.players) if (p.id !== except) p.link?.send(msg);
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.cancelCountdown();
+    this.clearEmptyTimer();
+    this.runner?.stop();
+    this.runner = null;
+    for (const p of this.players) if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    this.players = [];
+  }
+
+  private cancelCountdown(): void {
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
+    this.countdownEndsAt = undefined;
+    if (this.status === 'countdown') this.status = 'lobby';
+  }
+
+  private armEmptyTimer(): void {
+    this.clearEmptyTimer();
+    this.emptyTimer = setTimeout(() => {
+      this.emptyTimer = null;
+      if (this.players.length === 0) this.deps.onEmpty(this);
+    }, this.deps.emptyTtlMs ?? EMPTY_ROOM_TTL_MS);
+    this.emptyTimer.unref();
+  }
+
+  private clearEmptyTimer(): void {
+    if (this.emptyTimer) clearTimeout(this.emptyTimer);
+    this.emptyTimer = null;
+  }
+}
