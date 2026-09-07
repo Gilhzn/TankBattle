@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS matches_user ON match_results(user_id, created_at);
 CREATE INDEX IF NOT EXISTS matches_mode_score ON match_results(mode, score DESC);
 CREATE TABLE IF NOT EXISTS solo_sessions (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL, seed INTEGER NOT NULL, stage INTEGER NOT NULL, boosts TEXT NOT NULL DEFAULT '[]',
-  created_at INTEGER NOT NULL, consumed_at INTEGER);
+  difficulty TEXT NOT NULL DEFAULT 'normal', created_at INTEGER NOT NULL, consumed_at INTEGER);
 CREATE TABLE IF NOT EXISTS solo_claims (user_id TEXT NOT NULL, day INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, day));
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 `;
@@ -104,6 +104,7 @@ const toMatch = (r: Row): MatchResultRow => ({
 });
 const toSolo = (r: Row): SoloSessionRow => ({
   id: str(r.id), userId: str(r.user_id), seed: num(r.seed), stage: num(r.stage), boosts: json<SoloSessionRow['boosts']>(r.boosts, []),
+  difficulty: (str(r.difficulty) || 'normal') as SoloSessionRow['difficulty'],
   createdAt: num(r.created_at), consumedAt: nnum(r.consumed_at),
 });
 const toClaim = (r: Row): SoloClaimRow => ({ userId: str(r.user_id), day: num(r.day), coins: num(r.coins) });
@@ -177,8 +178,8 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
     matchByUser: many('SELECT * FROM match_results WHERE user_id = ?', toMatch),
     matchByMode: many('SELECT * FROM match_results WHERE mode = ? ORDER BY score DESC, created_at ASC', toMatch),
     soloGet: one('SELECT * FROM solo_sessions WHERE id = ?', toSolo),
-    soloInsert: run('INSERT INTO solo_sessions(id, user_id, seed, stage, boosts, created_at, consumed_at) VALUES (?,?,?,?,?,?,?)'),
-    soloUpdate: run('UPDATE solo_sessions SET user_id=?, seed=?, stage=?, boosts=?, created_at=?, consumed_at=? WHERE id=?'),
+    soloInsert: run('INSERT INTO solo_sessions(id, user_id, seed, stage, boosts, difficulty, created_at, consumed_at) VALUES (?,?,?,?,?,?,?,?)'),
+    soloUpdate: run('UPDATE solo_sessions SET user_id=?, seed=?, stage=?, boosts=?, difficulty=?, created_at=?, consumed_at=? WHERE id=?'),
     claimGet: one('SELECT * FROM solo_claims WHERE user_id = ? AND day = ?', toClaim),
     claimPut: run('INSERT INTO solo_claims(user_id, day, coins) VALUES (?,?,?) ON CONFLICT(user_id, day) DO UPDATE SET coins=excluded.coins'),
   };
@@ -263,10 +264,10 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
     },
     solo: {
       get: q.soloGet,
-      insert: (s) => void q.soloInsert(s.id, s.userId, s.seed, s.stage, JSON.stringify(s.boosts), s.createdAt, s.consumedAt),
+      insert: (s) => void q.soloInsert(s.id, s.userId, s.seed, s.stage, JSON.stringify(s.boosts), s.difficulty, s.createdAt, s.consumedAt),
       update: (id, patch) => {
         const s = { ...need(q.soloGet(id), 'solo session', id), ...patch };
-        q.soloUpdate(s.userId, s.seed, s.stage, JSON.stringify(s.boosts), s.createdAt, s.consumedAt, id);
+        q.soloUpdate(s.userId, s.seed, s.stage, JSON.stringify(s.boosts), s.difficulty, s.createdAt, s.consumedAt, id);
         return s;
       },
     },

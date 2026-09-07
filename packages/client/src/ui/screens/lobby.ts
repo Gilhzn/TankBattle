@@ -77,7 +77,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
         h('h2', null, t('lobby.create')),
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('lobby.mode')), modeTabs),
         h('label', { class: 'field row-field' }, h('span', null, t('lobby.private'), h('small', { class: 'muted' }, t('lobby.privateHint'))), toggle(isPrivate, (v) => (isPrivate = v), 'lobby-private')),
-        button(t('lobby.create'), { kind: 'primary', big: true, testid: 'lobby-create', onClick: () => { setStatus(t('common.loading')); ws.createRoom(mode, isPrivate, mode === 'versus' ? [] : loadout); } }),
+        button(t('lobby.create'), { kind: 'primary', big: true, testid: 'lobby-create', onClick: () => { setStatus(t('common.loading')); ws.createRoom(mode, isPrivate, mode === 'versus' ? [] : loadout, settings.get().difficulty); } }),
       ),
       panel(h('h2', null, t('lobby.joinTitle')), h('div', { class: 'join-row' }, code, joinBtn)),
       panel(

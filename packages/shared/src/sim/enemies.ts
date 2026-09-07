@@ -4,7 +4,7 @@ import {
 import type { Dir, GameState, Tank } from '../types.js';
 import { moveTank, positionFree } from './movement.js';
 import { tryFire } from './bullets.js';
-import { makeRng, saveRng } from './state.js';
+import { makeRng, saveRng, tuningOf } from './state.js';
 
 export function enemiesOnScreen(state: GameState): number {
   let n = 0;
@@ -14,7 +14,8 @@ export function enemiesOnScreen(state: GameState): number {
 
 export function spawnInterval(state: GameState): number {
   const players = state.players.filter((p) => p.active).length;
-  return Math.max(20, 95 - state.stage * 2 - (players - 1) * 10);
+  const base = Math.max(20, 95 - state.stage * 2 - (players - 1) * 10);
+  return Math.round(base * tuningOf(state).spawnInterval);
 }
 
 export function spawnEnemies(state: GameState): void {
@@ -43,7 +44,7 @@ export function spawnEnemies(state: GameState): void {
     tier: 0,
     hp: ENEMY_HP[kind],
     maxHp: ENEMY_HP[kind],
-    speed: ENEMY_SPEED[kind],
+    speed: Math.max(4, Math.round(ENEMY_SPEED[kind] * tuningOf(state).speed)),
     moving: false,
     shieldUntil: 0,
     spawnUntil: state.tick + SPAWN_FLASH_TICKS,
@@ -65,7 +66,7 @@ export function spawnEnemies(state: GameState): void {
 function chooseDir(state: GameState, tank: Tank, rng: { int(n: number): number }): Dir {
   const baseX = (BASE_TILE_X + 1) * TILE - TANK_SIZE / 2;
   const towardBase: Dir = tank.x < baseX ? 1 : 3;
-  const aggression = Math.min(40, state.stage * 3);
+  const aggression = Math.min(40, state.stage * 3) * tuningOf(state).aggression;
   const roll = rng.int(100);
   const nearBottom = tank.y > (GRID * TILE * 2) / 3;
   if (roll < (nearBottom ? 20 : 35) + aggression / 2) return 2;
@@ -101,7 +102,7 @@ export function updateEnemies(state: GameState): void {
         tank.ai.blocked = 0;
       }
     }
-    const fireChance = (ENEMY_FIRE_CHANCE[tank.kind] ?? 2) + Math.floor(state.stage / 4);
+    const fireChance = ((ENEMY_FIRE_CHANCE[tank.kind] ?? 2) + Math.floor(state.stage / 4)) * tuningOf(state).fire;
     if (rng.int(100) < fireChance) tryFire(state, tank);
   }
   saveRng(state, rng);

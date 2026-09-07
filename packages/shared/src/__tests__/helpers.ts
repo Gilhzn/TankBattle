@@ -1,6 +1,6 @@
 import { createInitialState, type PlayerInit } from '../sim/state.js';
 import { step } from '../sim/step.js';
-import type { Command, GameState, Input, Tank } from '../types.js';
+import type { Command, Difficulty, GameState, Input, Tank } from '../types.js';
 import { playerTank } from '../sim/players.js';
 
 export const NONE: Input = { dir: -1, fire: false };
@@ -10,8 +10,12 @@ export const DOWN: Input = { dir: 2, fire: false };
 export const LEFT: Input = { dir: 3, fire: false };
 export const FIRE: Input = { dir: -1, fire: true };
 
-export function makeState(seed = 42, stage = 1, players: PlayerInit[] = [{ id: 'a', name: 'A' }], mode: 'coop' | 'versus' = 'coop'): GameState {
-  return createInitialState(seed, stage, players, mode);
+/**
+ * Mechanic tests assert the classic tuning (3 lives, 4 enemies on screen, full fire rate), so they
+ * pin difficulty to 'hard' and stay stable when the default difficulty changes.
+ */
+export function makeState(seed = 42, stage = 1, players: PlayerInit[] = [{ id: 'a', name: 'A' }], mode: 'coop' | 'versus' = 'coop', difficulty: Difficulty = 'hard'): GameState {
+  return createInitialState(seed, stage, players, mode, difficulty);
 }
 
 export function run(state: GameState, ticks: number, inputs: (Input | null)[] = [NONE], commands: Command[] = []): void {

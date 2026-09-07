@@ -274,7 +274,7 @@ export const Api = {
   giftSend: (to: string, sku: string, qty: number, message?: string) => api<{ gift: GiftDTO; inventory: InventoryDTO; wallet: WalletDTO }>('POST', '/api/gifts/send', { to, sku, qty, ...(message ? { message } : {}) }),
   giftInbox: () => api<{ gifts: GiftDTO[] }>('GET', '/api/gifts/inbox'),
   giftClaim: (id: string) => api<{ wallet: WalletDTO; inventory: InventoryDTO }>('POST', `/api/gifts/${encodeURIComponent(id)}/claim`),
-  soloStart: (loadout: string[], stage = 1) => api<SoloStartResponse>('POST', '/api/solo/start', { loadout, stage }),
+  soloStart: (loadout: string[], stage = 1, difficulty = 'normal') => api<SoloStartResponse>('POST', '/api/solo/start', { loadout, stage, difficulty }),
   soloResult: (body: SoloResultBody) => api<SoloResultResponse>('POST', '/api/solo/result', body, { timeoutMs: 30000 }),
   leaderboard: (mode: 'solo' | 'coop' | 'versus') => api<{ entries: LeaderEntry[]; me?: LeaderEntry }>('GET', `/api/leaderboard?mode=${mode}`),
   health: () => api<{ ok: true; uptime: number; rooms: number; players: number }>('GET', '/api/health', undefined, { auth: false, timeoutMs: 4000 }),

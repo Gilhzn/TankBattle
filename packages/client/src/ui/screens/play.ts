@@ -21,13 +21,14 @@ export async function playScreen(root: HTMLElement): Promise<() => void> {
 
   const s = app.get();
   const loadout = settings.get().soloLoadout.filter((sku) => ownedQty(sku) > 0).slice(0, 3);
+  const difficulty = settings.get().difficulty;
   let soloId: string | null = null;
   let seed = (Math.random() * 0x7fffffff) | 0;
   let stage = 1;
   let boosts: BoostEffect[] = [];
   if (s.online) {
     try {
-      const res = await Api.soloStart(loadout, 1);
+      const res = await Api.soloStart(loadout, 1, difficulty);
       soloId = res.soloId;
       seed = res.seed;
       stage = res.stage;
@@ -41,7 +42,7 @@ export async function playScreen(root: HTMLElement): Promise<() => void> {
   if (disposed) return () => undefined;
 
   const nickname = s.user?.nickname || settings.get().nickname || 'Player';
-  host = new LocalGameHost({ seed, stage, players: [{ id: s.user?.id ?? 'local', name: nickname, skin: s.user?.skin ?? 'default' }], mode: 'coop', boosts });
+  host = new LocalGameHost({ seed, stage, players: [{ id: s.user?.id ?? 'local', name: nickname, skin: s.user?.skin ?? 'default' }], mode: 'coop', difficulty, boosts });
   const startedAt = Date.now();
 
   const finish = async (): Promise<void> => {

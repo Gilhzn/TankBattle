@@ -5,7 +5,7 @@ import { parseBody, type Router } from '../router.js';
 export function registerSoloRoutes(r: Router, app: App): void {
   r.post('/api/solo/start', (ctx) => {
     const body = parseBody(soloStartSchema, ctx.body);
-    return app.solo.start(ctx.user.id, body.loadout, body.stage);
+    return app.solo.start(ctx.user.id, body.loadout, body.stage, body.difficulty);
   });
   // Re-simulation is CPU-bound: charge it heavily against the per-user bucket.
   r.post('/api/solo/result', (ctx) => {

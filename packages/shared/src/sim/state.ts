@@ -1,11 +1,12 @@
 import {
-  ENEMIES_PER_STAGE, GRID, MAX_ENEMIES_ON_SCREEN, STARTING_LIVES, TILE, VERSUS_DURATION_TICKS,
+  DIFFICULTY, ENEMIES_PER_STAGE, GRID, MAX_ENEMIES_ON_SCREEN, STARTING_LIVES, TILE, VERSUS_DURATION_TICKS,
 } from '../constants.js';
 import { Rng, hashString } from '../rng.js';
 import { getStageDef, expandRoster } from '../maps/generator.js';
 import { VERSUS_ARENA } from '../maps/stages.js';
 import { parseCells } from '../maps/format.js';
-import type { GameMode, GameState, PlayerSlot, StageDef } from '../types.js';
+import type { DifficultyTuning } from '../constants.js';
+import type { Difficulty, GameMode, GameState, PlayerSlot, StageDef } from '../types.js';
 import { spawnPlayerTank } from './players.js';
 
 export interface PlayerInit {
@@ -16,12 +17,14 @@ export interface PlayerInit {
   tier?: number;
 }
 
-export function createInitialState(seed: number, stage: number, players: PlayerInit[], mode: GameMode = 'coop'): GameState {
+export function createInitialState(seed: number, stage: number, players: PlayerInit[], mode: GameMode = 'coop', difficulty: Difficulty = 'normal'): GameState {
+  const tuning = DIFFICULTY[difficulty] ?? DIFFICULTY.normal;
   const state: GameState = {
     tick: 0,
     seed,
     rng: seed | 0,
     mode,
+    difficulty,
     stage,
     tiles: new Uint8Array(GRID * GRID),
     tanks: [],
@@ -33,7 +36,7 @@ export function createInitialState(seed: number, stage: number, players: PlayerI
       name: p.name,
       active: true,
       tankId: null,
-      lives: p.lives ?? STARTING_LIVES,
+      lives: p.lives ?? tuning.lives,
       score: 0,
       kills: 0,
       deaths: 0,
@@ -55,6 +58,11 @@ export function createInitialState(seed: number, stage: number, players: PlayerI
   };
   loadStage(state, stage);
   return state;
+}
+
+/** The active difficulty tuning for a running game. */
+export function tuningOf(state: GameState): DifficultyTuning {
+  return DIFFICULTY[state.difficulty] ?? DIFFICULTY.normal;
 }
 
 export function stageDefFor(state: GameState, stage: number): StageDef {
@@ -83,7 +91,7 @@ export function loadStage(state: GameState, stage: number): void {
     killed: 0,
     nextSpawnTick: state.tick,
     spawnIndex: 0,
-    maxOnScreen: Math.min(MAX_ENEMIES_ON_SCREEN + Math.max(0, activePlayers(state).length - 2), 6),
+    maxOnScreen: Math.min(tuningOf(state).maxOnScreen + Math.max(0, activePlayers(state).length - 2), 6),
   };
   for (const p of state.players) {
     p.tankId = null;

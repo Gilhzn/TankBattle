@@ -1,6 +1,6 @@
 import {
   CATALOG, CATALOG_BY_SKU, HELMET_TICKS, TICK_MS, createInitialState, encodeSnapshot, stageDefFor, step,
-  type BoostEffect, type Command, type GameMode, type GameState, type Input, type PlayerInit, type Snapshot, type TickEvent,
+  type BoostEffect, type Command, type Difficulty, type GameMode, type GameState, type Input, type PlayerInit, type Snapshot, type TickEvent,
 } from '@tank/shared';
 import { Emitter, type GameTransport, type MetaEvent } from './transport.js';
 
@@ -9,6 +9,7 @@ export interface LocalHostOptions {
   stage: number;
   players: PlayerInit[];
   mode?: GameMode;
+  difficulty?: Difficulty;
   /** Effects the server pre-authorised for this solo match (from /api/solo/start). Offline: none. */
   boosts?: BoostEffect[];
 }
@@ -51,7 +52,7 @@ export class LocalGameHost implements GameTransport {
   private stageName: string;
 
   constructor(opts: LocalHostOptions) {
-    this.state = createInitialState(opts.seed, opts.stage, opts.players, opts.mode ?? 'coop');
+    this.state = createInitialState(opts.seed, opts.stage, opts.players, opts.mode ?? 'coop', opts.difficulty ?? 'normal');
     this.stageName = stageDefFor(this.state, this.state.stage).name;
     for (const b of opts.boosts ?? []) {
       if (AT_START.has(b)) {

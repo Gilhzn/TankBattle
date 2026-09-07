@@ -1,3 +1,4 @@
+import { DIFFICULTY } from '@tank/shared';
 import type { ServerMessage } from '@tank/shared';
 import { describe, expect, it } from 'vitest';
 import { createJsonDb } from '../src/db/json.js';
@@ -58,7 +59,8 @@ describe('GameRunner', () => {
     expect(inventory.qty('p1', 'boost_life')).toBe(0);
     expect(inventory.qty('p1', 'boost_star')).toBe(0);
     runner.stepTicks(1);
-    expect(runner.state.players[0].lives).toBe(4);
+    // The boost grants one life on top of whatever the room's difficulty starts players with.
+    expect(runner.state.players[0].lives).toBe(DIFFICULTY[runner.state.difficulty].lives + 1);
     expect(runner.state.players[0].tier).toBe(1);
     expect(runner.state.players[0].usedItems).toEqual({ boost_life: 1, boost_star: 1 });
     expect(runner.state.players[1].skin).toBe('skin_void');

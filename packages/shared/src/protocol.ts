@@ -4,13 +4,14 @@ export const PROTOCOL_VERSION = 1;
 
 const dirSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(-1)]);
 const modeSchema = z.enum(['coop', 'versus']);
+export const difficultySchema = z.enum(['easy', 'normal', 'hard']);
 const codeSchema = z.string().regex(/^[A-Z2-9]{5}$/);
 export const nicknameSchema = z.string().trim().min(2).max(16).regex(/^[\p{L}\p{N} _.-]+$/u);
 export const skuSchema = z.string().regex(/^[a-z0-9_]{2,40}$/);
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), token: z.string().min(10).max(2048), version: z.number().int() }),
-  z.object({ type: z.literal('createRoom'), mode: modeSchema, isPrivate: z.boolean().default(false), loadout: z.array(skuSchema).max(6).default([]) }),
+  z.object({ type: z.literal('createRoom'), mode: modeSchema, isPrivate: z.boolean().default(false), loadout: z.array(skuSchema).max(6).default([]), difficulty: difficultySchema.default('normal') }),
   z.object({ type: z.literal('joinRoom'), code: codeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
   z.object({ type: z.literal('quickPlay'), mode: modeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
   z.object({ type: z.literal('leaveRoom') }),
@@ -94,7 +95,11 @@ export const giftSendSchema = z
   .refine((g) => (g.sku === 'gems' ? g.qty <= 5000 : g.qty <= 10), { message: 'qty too large for this item', path: ['qty'] });
 export const battlepassClaimSchema = z.object({ tier: z.number().int().min(1).max(60), track: z.enum(['free', 'premium']) });
 export const adCompleteSchema = z.object({ adSessionId: z.string().min(1).max(64), placement: z.enum(['results', 'menu']).default('menu') });
-export const soloStartSchema = z.object({ loadout: z.array(skuSchema).max(6).default([]), stage: z.number().int().min(1).max(999).default(1) });
+export const soloStartSchema = z.object({
+  loadout: z.array(skuSchema).max(6).default([]),
+  stage: z.number().int().min(1).max(999).default(1),
+  difficulty: difficultySchema.default('normal'),
+});
 export const boostEffectSchema = z.enum(['grenade', 'clock', 'shield', 'life', 'star', 'revive']);
 export const soloResultSchema = z.object({
   soloId: z.string().min(1).max(64),

@@ -1,3 +1,4 @@
+import type { Difficulty } from '@tank/shared';
 import type { GameRunner } from '../game/runner.js';
 import { newId, newJoinCode } from '../util/ids.js';
 import type { Logger } from '../util/log.js';
@@ -34,10 +35,10 @@ export class RoomManager {
     return this.byCode.get(code.toUpperCase());
   }
 
-  create(user: RoomUser, link: PlayerLink, mode: 'coop' | 'versus', isPrivate: boolean, loadout: string[], quickPlay = false): Room {
+  create(user: RoomUser, link: PlayerLink, mode: 'coop' | 'versus', isPrivate: boolean, loadout: string[], quickPlay = false, difficulty: Difficulty = 'normal'): Room {
     let code = newJoinCode();
     while (this.byCode.has(code)) code = newJoinCode();
-    const room = new Room(newId(), code, mode, isPrivate, quickPlay, {
+    const room = new Room(newId(), code, mode, difficulty, isPrivate, quickPlay, {
       clock: this.opts.clock,
       log: this.opts.log,
       countdownMs: this.opts.countdownMs,

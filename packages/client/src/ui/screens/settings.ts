@@ -1,7 +1,7 @@
 import { Api, errorMessage } from '../../app/api.js';
 import { h } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
-import { settings, type Handedness } from '../../app/settings.js';
+import { settings, type Difficulty, type Handedness } from '../../app/settings.js';
 import { app, toast } from '../../app/store.js';
 import { setLang, t } from '../../i18n/index.js';
 import { button, labelled, panel, screenShell, toggle } from '../components.js';
@@ -66,6 +66,11 @@ export function settingsScreen(root: HTMLElement): () => void {
     ),
     panel(
       h('h2', null, t('settings.controls')),
+      labelled(t('settings.difficulty'), seg<Difficulty>([
+        { id: 'easy', label: t('settings.easy'), testid: 'diff-easy' },
+        { id: 'normal', label: t('settings.normal'), testid: 'diff-normal' },
+        { id: 'hard', label: t('settings.hard'), testid: 'diff-hard' },
+      ], s.difficulty, (difficulty) => { settings.set({ difficulty }); navigate('/settings'); }), t('settings.difficultyHint')),
       labelled(t('settings.handedness'), seg<Handedness>([{ id: 'left', label: t('settings.left'), testid: 'hand-left' }, { id: 'right', label: t('settings.right'), testid: 'hand-right' }], s.handedness, (handedness) => { settings.set({ handedness }); navigate('/settings'); })),
       labelled(t('settings.joystickSize'), h('div', { class: 'row' }, size, sizeVal)),
       h('p', { class: 'muted small' }, t('settings.keyboard')),

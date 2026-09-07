@@ -1,3 +1,4 @@
+import type { Difficulty } from '@tank/shared';
 import { MAX_PLAYERS, type RoomPlayerInfo, type RoomStateMessage, type RoomStatus, type ServerMessage } from '@tank/shared';
 import type { GameRunner } from '../game/runner.js';
 import { newNonce } from '../util/ids.js';
@@ -50,6 +51,7 @@ export class Room {
     readonly id: string,
     readonly code: string,
     readonly mode: 'coop' | 'versus',
+    readonly difficulty: Difficulty,
     readonly isPrivate: boolean,
     readonly quickPlay: boolean,
     private readonly deps: RoomDeps,

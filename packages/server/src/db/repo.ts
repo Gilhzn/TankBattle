@@ -1,4 +1,4 @@
-import type { BoostEffect } from '@tank/shared';
+import type { BoostEffect, Difficulty } from '@tank/shared';
 
 /** Row types shared by both store implementations. All timestamps are ms since epoch. */
 export interface UserRow {
@@ -99,6 +99,7 @@ export interface SoloSessionRow {
   userId: string;
   seed: number;
   stage: number;
+  difficulty: Difficulty;
   boosts: BoostEffect[];
   createdAt: number;
   consumedAt: number | null;

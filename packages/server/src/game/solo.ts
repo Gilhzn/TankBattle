@@ -1,4 +1,4 @@
-import { HELMET_TICKS, REWARD_RULES, simulateReplay, type BoostEffect, type Command, type Input } from '@tank/shared';
+import { HELMET_TICKS, REWARD_RULES, simulateReplay, type BoostEffect, type Command, type Difficulty, type Input } from '@tank/shared';
 import type { Db } from '../db/repo.js';
 import type { BattlePassDTO, BattlepassService } from '../economy/battlepass.js';
 import { boostOrNull } from '../economy/catalog.js';
@@ -17,6 +17,7 @@ export interface SoloStart {
   soloId: string;
   seed: number;
   stage: number;
+  difficulty: Difficulty;
   boosts: BoostEffect[];
   inventory: InventoryDTO;
 }
@@ -55,7 +56,7 @@ export class SoloService {
     private readonly clock: Clock,
   ) {}
 
-  start(userId: string, loadout: string[], requestedStage: number): SoloStart {
+  start(userId: string, loadout: string[], requestedStage: number, difficulty: Difficulty = 'normal'): SoloStart {
     const now = this.clock();
     // Players may only start from stages they have already reached (+1), so late-stage coin farming is impossible.
     const maxStage = Math.max(1, this.db.matches.stats(userId).bestStage + 1);
@@ -70,8 +71,8 @@ export class SoloService {
       }
       const id = newId();
       const seed = newSeed();
-      this.db.solo.insert({ id, userId, seed, stage, boosts, createdAt: now, consumedAt: null });
-      return { soloId: id, seed, stage, boosts, inventory: this.inventory.list(userId) };
+      this.db.solo.insert({ id, userId, seed, stage, difficulty, boosts, createdAt: now, consumedAt: null });
+      return { soloId: id, seed, stage, difficulty, boosts, inventory: this.inventory.list(userId) };
     });
   }
 
@@ -96,7 +97,8 @@ export class SoloService {
     }
 
     const inputs = body.inputs.map((frame): [number, number][] => [normalizeFrame(frame[0])]);
-    const state = simulateReplay({ seed: s.seed, stage: s.stage, players: 1, inputs, commands });
+    // Difficulty comes from the stored session, never the client, so the replay matches what was played.
+    const state = simulateReplay({ seed: s.seed, stage: s.stage, players: 1, difficulty: s.difficulty, inputs, commands });
     const p = state.players[0];
     const score = p?.score ?? 0;
     const kills = p?.kills ?? 0;

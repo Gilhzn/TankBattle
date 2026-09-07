@@ -49,7 +49,7 @@ export class GameRunner {
     this.seed = newSeed();
     this.tickMs = 1000 / deps.tickRate;
     const players = [...room.players].sort((a, b) => a.slot - b.slot).map((p) => ({ id: p.id, name: p.name, skin: p.skin }));
-    this.state = createInitialState(this.seed, this.startStage, players, room.mode);
+    this.state = createInitialState(this.seed, this.startStage, players, room.mode, room.difficulty);
   }
 
   get tick(): number {

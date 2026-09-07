@@ -31,6 +31,31 @@ export const STAGE_CLEAR_TICKS = 90;
 export const VERSUS_DURATION_TICKS = 180 * TICK_RATE;
 export const POWERUP_LIFETIME_TICKS = 30 * TICK_RATE;
 export const STARTING_LIVES = 3;
+
+/**
+ * Difficulty scales the pressure the player is under, not the rules of the game: how often enemies
+ * fire, how fast they close in, how quickly reinforcements arrive and how many lives you start with.
+ * It lives in the simulation because the server re-simulates solo runs to verify scores.
+ */
+export interface DifficultyTuning {
+  /** Multiplies each enemy kind's per-tick chance to fire. */
+  fire: number;
+  /** Multiplies enemy movement speed. */
+  speed: number;
+  /** Multiplies the gap between reinforcements: above 1 means they trickle in. */
+  spawnInterval: number;
+  /** Hard cap on enemies alive at once. */
+  maxOnScreen: number;
+  /** Multiplies how strongly the AI steers toward the base rather than wandering. */
+  aggression: number;
+  lives: number;
+}
+
+export const DIFFICULTY: Record<'easy' | 'normal' | 'hard', DifficultyTuning> = {
+  easy: { fire: 0.35, speed: 0.75, spawnInterval: 1.9, maxOnScreen: 2, aggression: 0.25, lives: 5 },
+  normal: { fire: 0.55, speed: 0.85, spawnInterval: 1.45, maxOnScreen: 3, aggression: 0.45, lives: 4 },
+  hard: { fire: 1, speed: 1, spawnInterval: 1, maxOnScreen: 4, aggression: 1, lives: 3 },
+};
 export const MAX_LIVES = 9;
 export const MAX_TIER = 3;
 

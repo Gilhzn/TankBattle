@@ -25,8 +25,8 @@ describe('determinism', () => {
   it('same seed + inputs => identical state hash after 2000 ticks', () => {
     const inputs = scriptedInputs(99, 2000, 2);
     const players = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
-    const a = createInitialState(777, 1, players);
-    const b = createInitialState(777, 1, players);
+    const a = createInitialState(777, 1, players, 'coop', 'hard');
+    const b = createInitialState(777, 1, players, 'coop', 'hard');
     for (const frame of inputs) {
       step(a, frame);
       step(b, frame);

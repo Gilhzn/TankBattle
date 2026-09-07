@@ -1,11 +1,12 @@
 import { createInitialState, hashState } from './sim/state.js';
 import { step } from './sim/step.js';
-import type { Command, GameState, Input } from './types.js';
+import type { Command, Difficulty, GameState, Input } from './types.js';
 
 export interface Replay {
   seed: number;
   stage: number;
   players: number;
+  difficulty?: Difficulty;
   /** inputs[tick][slot] = [dir, fire] */
   inputs: Array<Array<[number, number]>>;
   /** Server-authorised commands (consumable boosts) keyed by the tick they were applied on. */
@@ -14,7 +15,7 @@ export interface Replay {
 
 export function simulateReplay(r: Replay, onTick?: (state: GameState) => void): GameState {
   const players = Array.from({ length: r.players }, (_, i) => ({ id: `p${i}`, name: `P${i + 1}` }));
-  const state = createInitialState(r.seed, r.stage, players);
+  const state = createInitialState(r.seed, r.stage, players, 'coop', r.difficulty ?? 'normal');
   const byTick = new Map<number, Command[]>();
   for (const c of r.commands ?? []) {
     const list = byTick.get(c.tick) ?? [];

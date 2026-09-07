@@ -144,7 +144,7 @@ export class Session implements PlayerLink {
         return;
       case 'createRoom':
         this.leaveCurrent();
-        this.room = this.deps.rooms.create(this.roomUser(), this, msg.mode, msg.isPrivate, msg.loadout);
+        this.room = this.deps.rooms.create(this.roomUser(), this, msg.mode, msg.isPrivate, msg.loadout, false, msg.difficulty);
         return;
       case 'joinRoom':
         this.leaveCurrent();

@@ -2,9 +2,11 @@ import { Store } from './store.js';
 
 export type Lang = 'en' | 'he';
 export type Handedness = 'left' | 'right';
+export type Difficulty = 'easy' | 'normal' | 'hard';
 
 export interface Settings {
   lang: Lang;
+  difficulty: Difficulty;
   handedness: Handedness;
   joystickSize: number; // px diameter
   sound: boolean;
@@ -25,6 +27,7 @@ function detectLang(): Lang {
 function defaults(): Settings {
   return {
     lang: detectLang(),
+    difficulty: 'normal',
     handedness: 'left',
     joystickSize: 140,
     sound: true,

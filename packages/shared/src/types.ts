@@ -17,6 +17,7 @@ export type EnemyKind = Exclude<TankKind, 'player'>;
 export type PowerUpKind = 'star' | 'tank' | 'grenade' | 'clock' | 'shovel' | 'helmet' | 'ship' | 'gun';
 export const POWERUP_KINDS: PowerUpKind[] = ['star', 'tank', 'grenade', 'clock', 'shovel', 'helmet', 'ship', 'gun'];
 export type GameMode = 'coop' | 'versus';
+export type Difficulty = 'easy' | 'normal' | 'hard';
 export type GameStatus = 'playing' | 'stageClear' | 'gameOver';
 
 export interface AiState {
@@ -140,6 +141,7 @@ export interface GameState {
   seed: number;
   rng: number;
   mode: GameMode;
+  difficulty: Difficulty;
   stage: number;
   tiles: Uint8Array;
   tanks: Tank[];
