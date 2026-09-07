@@ -2,8 +2,8 @@
 # Render keeps a long-running Node process and proxies WebSockets, which the game server needs.
 #
 # Persistence: the free plan has no persistent disk, so accounts and wallets reset when the
-# service restarts. To keep them, move to a paid instance and uncomment the `disk` block below —
-# DB_PATH already points at its mount path.
+# service restarts. To keep them, move to a paid instance, uncomment the `disk` block below and
+# change DB_PATH to /var/data/tank.db so the database lives on that volume.
 services:
   - type: web
     name: tank1990
