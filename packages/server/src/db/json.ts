@@ -168,6 +168,7 @@ export function createJsonDb(filePath: string | null): Db {
       },
       list: (userId) => [...data.orders.values()].filter((o) => o.userId === userId).sort((a, b) => b.createdAt - a.createdAt),
       hasCompleted: (userId, sku) => [...data.orders.values()].some((o) => o.userId === userId && o.sku === sku && o.status === 'completed'),
+      countPending: (userId) => [...data.orders.values()].filter((o) => o.userId === userId && o.status === 'pending').length,
     },
     gifts: {
       get: (id) => data.gifts.get(id),

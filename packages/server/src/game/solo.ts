@@ -55,8 +55,11 @@ export class SoloService {
     private readonly clock: Clock,
   ) {}
 
-  start(userId: string, loadout: string[], stage: number): SoloStart {
+  start(userId: string, loadout: string[], requestedStage: number): SoloStart {
     const now = this.clock();
+    // Players may only start from stages they have already reached (+1), so late-stage coin farming is impossible.
+    const maxStage = Math.max(1, this.db.matches.stats(userId).bestStage + 1);
+    const stage = Math.min(Math.max(1, requestedStage), maxStage);
     return this.db.transaction(() => {
       const boosts: BoostEffect[] = [];
       for (const sku of new Set(loadout)) {

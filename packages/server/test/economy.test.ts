@@ -44,6 +44,17 @@ describe('store', () => {
     expect(orders.body.orders[0].status).toBe('completed');
   });
 
+  it('caps pending checkouts per user', async () => {
+    const C = await guest(server, 'EconCarol');
+    for (let i = 0; i < 20; i++) {
+      if (i % 5 === 0) now += 60_000; // stay under the per-user rate limit so the pending cap is what triggers
+      expect((await C.call('POST', '/api/store/checkout', { sku: 'gems_100' })).status).toBe(200);
+    }
+    now += 60_000;
+    const over = await C.call<{ error: { code: string } }>('POST', '/api/store/checkout', { sku: 'gems_100' });
+    expect(over.status).toBe(409);
+    expect(over.body.error.code).toBe('too_many_pending');
+  });
   it('purchases with coins after a debug credit; rejects unaffordable and unknown items', async () => {
     const poor = await A.call('POST', '/api/store/purchase', { sku: 'boost_grenade', qty: 1, currency: 'coins' });
     expect(poor.status).toBe(409);
@@ -156,6 +167,12 @@ describe('rewards', () => {
 });
 
 describe('solo', () => {
+  it('clamps the starting stage to the best stage reached + 1', async () => {
+    const D = await guest(server, 'EconDave');
+    const far = await D.call<{ stage: number }>('POST', '/api/solo/start', { loadout: [], stage: 9 });
+    expect(far.status).toBe(200);
+    expect(far.body.stage).toBe(1);
+  });
   it('re-simulates the replay, pays the simulated score and flags tampered claims', async () => {
     const start = await A.call<{ soloId: string; seed: number; stage: number; boosts: string[]; inventory: Inv }>('POST', '/api/solo/start', { loadout: ['boost_shield', 'boost_clock'], stage: 1 });
     expect(start.status).toBe(200);

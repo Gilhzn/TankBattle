@@ -89,7 +89,9 @@ export const purchaseSchema = z.object({ sku: skuSchema, qty: z.number().int().m
 export const checkoutSchema = z.object({ sku: skuSchema });
 export const mockCompleteSchema = z.object({ orderId: z.string().min(1).max(64) });
 export const equipSchema = z.object({ sku: skuSchema });
-export const giftSendSchema = z.object({ to: z.string().trim().min(2).max(40), sku: skuSchema, qty: z.number().int().min(1).max(10).default(1), message: z.string().trim().max(120).optional() });
+export const giftSendSchema = z
+  .object({ to: z.string().trim().min(2).max(40), sku: skuSchema, qty: z.number().int().min(1).max(5000).default(1), message: z.string().trim().max(120).optional() })
+  .refine((g) => (g.sku === 'gems' ? g.qty <= 5000 : g.qty <= 10), { message: 'qty too large for this item', path: ['qty'] });
 export const battlepassClaimSchema = z.object({ tier: z.number().int().min(1).max(60), track: z.enum(['free', 'premium']) });
 export const adCompleteSchema = z.object({ adSessionId: z.string().min(1).max(64), placement: z.enum(['results', 'menu']).default('menu') });
 export const soloStartSchema = z.object({ loadout: z.array(skuSchema).max(6).default([]), stage: z.number().int().min(1).max(999).default(1) });

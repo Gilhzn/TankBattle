@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientMessageSchema, guestAuthSchema, nicknameSchema, soloResultSchema } from '../protocol.js';
+import { clientMessageSchema, giftSendSchema, guestAuthSchema, nicknameSchema, soloResultSchema } from '../protocol.js';
 import { CATALOG, CATALOG_BY_SKU, BATTLEPASS_TIERS, matchRewards } from '../economy.js';
 
 describe('protocol', () => {
@@ -20,6 +20,12 @@ describe('protocol', () => {
     expect(nicknameSchema.safeParse('שחקן_1').success).toBe(true);
     expect(nicknameSchema.safeParse('<script>').success).toBe(false);
     expect(guestAuthSchema.safeParse({}).success).toBe(true);
+  });
+  it('gift quantities: items up to 10, raw gems up to 5000', () => {
+    expect(giftSendSchema.safeParse({ to: 'Bob', sku: 'boost_shield', qty: 10 }).success).toBe(true);
+    expect(giftSendSchema.safeParse({ to: 'Bob', sku: 'boost_shield', qty: 11 }).success).toBe(false);
+    expect(giftSendSchema.safeParse({ to: 'Bob', sku: 'gems', qty: 500 }).success).toBe(true);
+    expect(giftSendSchema.safeParse({ to: 'Bob', sku: 'gems', qty: 5001 }).success).toBe(false);
   });
   it('solo result schema bounds input size', () => {
     expect(soloResultSchema.safeParse({ soloId: 's1', inputs: [[[0, 1]]], commands: [[5, 'grenade']], claimedScore: 0, claimedStage: 1 }).success).toBe(true);

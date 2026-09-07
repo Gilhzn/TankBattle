@@ -19,6 +19,8 @@ export interface OrderDTO {
   currency: 'usd';
 }
 
+export const MAX_PENDING_ORDERS = 20;
+
 export const orderDto = (o: OrderRow): OrderDTO => ({ id: o.id, sku: o.sku, provider: o.provider, status: o.status, amountCents: o.amountCents, currency: o.currency });
 
 /** Store purchases (soft currency), real-money checkout and idempotent fulfilment. */
@@ -67,6 +69,7 @@ export class StoreService {
     const item = getItem(sku);
     const amountCents = usdPriceOf(item);
     if (item.oneTime && this.ownsOneTime(userId, item)) throw conflict('already owned', 'already_owned');
+    if (this.db.orders.countPending(userId) >= MAX_PENDING_ORDERS) throw conflict('too many pending orders', 'too_many_pending');
     const now = this.clock();
     const order: OrderRow = { id: newId(), userId, sku, provider: this.provider.name, status: 'pending', amountCents, currency: 'usd', providerRef: null, createdAt: now, updatedAt: now };
     this.db.orders.insert(order);

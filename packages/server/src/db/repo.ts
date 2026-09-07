@@ -143,6 +143,7 @@ export interface OrdersRepo {
   update(id: string, patch: Partial<Omit<OrderRow, 'id'>>): OrderRow;
   list(userId: string): OrderRow[];
   hasCompleted(userId: string, sku: string): boolean;
+  countPending(userId: string): number;
 }
 export interface GiftsRepo {
   get(id: string): GiftRow | undefined;

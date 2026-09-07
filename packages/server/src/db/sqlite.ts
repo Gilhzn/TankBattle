@@ -156,6 +156,7 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
     orderUpdate: run('UPDATE orders SET user_id=?, sku=?, provider=?, status=?, amount_cents=?, currency=?, provider_ref=?, created_at=?, updated_at=? WHERE id=?'),
     orderList: many('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', toOrder),
     orderCompleted: countOf("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND sku = ? AND status = 'completed'"),
+    orderPending: countOf("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status = 'pending'"),
     giftGet: one('SELECT * FROM gifts WHERE id = ?', toGift),
     giftInsert: run('INSERT INTO gifts(id, from_id, to_id, sku, qty, message, status, created_at, claimed_at) VALUES (?,?,?,?,?,?,?,?,?)'),
     giftUpdate: run('UPDATE gifts SET from_id=?, to_id=?, sku=?, qty=?, message=?, status=?, created_at=?, claimed_at=? WHERE id=?'),
@@ -224,6 +225,7 @@ export function createSqliteDb(ctor: SqliteCtor, path: string): Db {
       },
       list: q.orderList,
       hasCompleted: (userId, sku) => q.orderCompleted(userId, sku) > 0,
+      countPending: (userId) => q.orderPending(userId),
     },
     gifts: {
       get: q.giftGet,
