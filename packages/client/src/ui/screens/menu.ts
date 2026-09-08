@@ -92,7 +92,8 @@ export function menuScreen(root: HTMLElement): () => void {
   );
   const hint = el.querySelector('.offline-hint') as HTMLElement;
   const renderHint = (s: AppState): void => {
-    hint.textContent = s.booted && !s.online ? t('menu.offlineHint') : '';
+    // While a sleeping host wakes, say so — 40 seconds of nothing reads as a broken link.
+    hint.textContent = s.waking ? t('app.waking') : s.booted && !s.online ? t('menu.offlineHint') : '';
   };
   renderProfile(app.get());
   renderHint(app.get());

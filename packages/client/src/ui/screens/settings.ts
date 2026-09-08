@@ -40,6 +40,19 @@ export function settingsScreen(root: HTMLElement): () => void {
       toast(t('settings.saved'), 'success');
     },
   });
+  // Shown only while the account has no sign-in linked to it, so it disappears the moment one does.
+  const guestNote = h('p', { class: 'warn-note', dataset: { testid: 'settings-guest-note' } }, t('auth.guestWarning'));
+  guestNote.hidden = true;
+  void (async () => {
+    if (!app.get().online) return;
+    try {
+      const { registered } = await Api.account();
+      guestNote.hidden = registered;
+    } catch {
+      // Not worth an error toast: the note simply stays hidden.
+    }
+  })();
+
   const sizeVal = h('span', { class: 'muted' }, `${s.joystickSize}px`);
   const size = h('input', { class: 'range', type: 'range', min: 100, max: 220, step: 10, value: String(s.joystickSize), dataset: { testid: 'settings-joystick-size' }, oninput: () => { settings.set({ joystickSize: Number(size.value) }); sizeVal.textContent = `${size.value}px`; } });
 
@@ -63,6 +76,9 @@ export function settingsScreen(root: HTMLElement): () => void {
       h('h2', null, t('settings.nickname')),
       h('div', { class: 'join-row' }, nick, saveNick),
       h('small', { class: 'muted' }, t('settings.nicknameHint')),
+      // A guest account is tied to this device and this server's storage. Saying so here is the
+      // difference between a known limitation and a player who thinks their progress was stolen.
+      guestNote,
     ),
     panel(
       h('h2', null, t('settings.controls')),

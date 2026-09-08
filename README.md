@@ -31,6 +31,11 @@ create yourself; without it the game keeps working and simply does not offer tha
 | `MAIL_FROM` | " | A sender address you have verified with that provider. |
 | `MAIL_ENDPOINT` | " | Only for `custom`: the URL to POST to. |
 
+`PUBLIC_URL` is optional. The server derives its own address from the request, so invite links come
+out absolute with nothing configured; set it (no trailing slash) only when a custom domain or an
+extra proxy sits in front of the service, or when going live with Stripe, whose checkout redirects
+are built outside any request.
+
 With no `MAIL_PROVIDER`, verification codes are written to the server log instead of emailed, and
 the sign-in screen says so rather than pretending a message was sent. That is fine for local
 development and wrong for production.
@@ -95,7 +100,15 @@ Vercel runs serverless functions, which cannot hold the long-lived WebSocket con
 
 **Full game, multiplayer included.** `packages/server` is a long-running Node process (WebSocket + REST + SQLite) and needs a host that keeps a process alive — Render, Railway, Fly.io, or any VPS. It serves the built client itself, so one service covers everything.
 
-- **Render** — `render.yaml` is a blueprint: point Render at the repo, and it installs, builds, starts the server, health-checks `/api/health` and generates `SECRET`. The free plan has no persistent disk, so accounts and wallets reset when the service restarts; the blueprint has a commented `disk` block to enable on a paid instance (switch `DB_PATH` to `/var/data/tank.db` at the same time).
+- **Render** — `render.yaml` is a blueprint: point Render at the repo, and it installs, builds, starts
+  the server, health-checks `/api/health` and generates `SECRET`. It ships on the free plan, which
+  means two things worth knowing: the database has no persistent disk, so every account, friendship,
+  rating and wallet resets on each restart and deploy (the server warns about this at boot); and the
+  service sleeps after ~15 minutes idle and takes 30-60s to wake, which the client handles by
+  showing a "waking up" notice instead of falsely reporting the player offline. To keep the data,
+  switch `plan` to `starter`, uncomment the `disk` block and set `DB_PATH=/var/data/tank.db`.
+  After a deploy, `node scripts/smoke.mjs https://<your-service>.onrender.com` checks the server,
+  guest auth, friends, profile and invite links in one go.
 - **Railway / Fly.io / any Docker host** — the `Dockerfile` builds all three packages and runs the server as a non-root user. Mount a volume at `/data` to keep the database, which `DB_PATH` already points at.
 - **Anywhere else**
 

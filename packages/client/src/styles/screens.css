@@ -1264,3 +1264,15 @@ html[dir='rtl'] .btn.back .chev {
   margin-block-start: var(--space-3);
   font-size: var(--fs-s);
 }
+
+/* A caveat the player needs to read but that is not an error: the dev mail fallback, a guest
+   account that lives only on this device. Amber rather than red — informative, not alarming. */
+.warn-note {
+  margin-block-start: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-m);
+  border-inline-start: 3px solid var(--amber);
+  background: rgba(255, 209, 102, 0.1);
+  color: var(--fg);
+  font-size: var(--fs-s);
+}

@@ -188,30 +188,55 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: 
   return json as T;
 }
 
+/**
+ * How long boot waits for the very first response.
+ *
+ * Deliberately far longer than the 12 s used everywhere else: a host that sleeps when idle (Render's
+ * free tier, and most hobby plans) takes 30-60 s to wake, and the old 12 s budget aborted the
+ * request and dropped the whole app into offline mode on a server that was about to answer
+ * perfectly well. A genuinely offline device is unaffected by the longer wait, because its fetch
+ * rejects immediately on a failed connection rather than hanging.
+ */
+const BOOT_TIMEOUT_MS = 45_000;
+/** How long the server may take before we tell the player it is waking up rather than broken. */
+const WAKING_NOTICE_MS = 3_500;
+
 /** Guest auth + /api/me. Never throws; leaves the app in offline mode when the server is unreachable. */
 export async function boot(): Promise<void> {
+  const newGuest = async (withNickname: boolean): Promise<void> => {
+    const nick = settings.get().nickname.trim();
+    const res = await api<{ token: string; user: UserDTO; isNew: boolean }>(
+      'POST',
+      '/api/auth/guest',
+      { deviceToken: deviceToken(), ...(withNickname && nick.length >= 2 ? { nickname: nick } : {}) },
+      { auth: false, timeoutMs: BOOT_TIMEOUT_MS },
+    );
+    setToken(res.token);
+    app.set({ user: res.user });
+  };
+
+  // Says "waking up" only if the wait actually drags; a warm server never shows it.
+  const notice = window.setTimeout(() => {
+    if (!app.get().booted) app.set({ waking: true });
+  }, WAKING_NOTICE_MS);
+
   try {
-    if (!getToken()) {
-      const nick = settings.get().nickname.trim();
-      const res = await api<{ token: string; user: UserDTO; isNew: boolean }>('POST', '/api/auth/guest', {
-        deviceToken: deviceToken(),
-        ...(nick.length >= 2 ? { nickname: nick } : {}),
-      }, { auth: false });
-      setToken(res.token);
-      app.set({ user: res.user });
-    }
-    await refreshMe();
+    if (!getToken()) await newGuest(true);
+    await refreshMe(BOOT_TIMEOUT_MS);
     app.set({ online: true });
     void syncPendingResults();
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
-      // retry once with a fresh guest session
-      setToken(null);
+    // 401: the stored token is stale. Network: the first request lost the race with a cold start,
+    // and by now the host is usually awake — both are worth exactly one retry.
+    const stale = e instanceof ApiError && e.status === 401;
+    const dropped = e instanceof ApiError && e.status === 0;
+    if (stale || dropped) {
+      if (stale) setToken(null);
       try {
-        const res = await api<{ token: string; user: UserDTO; isNew: boolean }>('POST', '/api/auth/guest', { deviceToken: deviceToken() }, { auth: false });
-        setToken(res.token);
-        await refreshMe();
+        if (!getToken()) await newGuest(false);
+        await refreshMe(BOOT_TIMEOUT_MS);
         app.set({ online: true });
+        void syncPendingResults();
         return;
       } catch {
         /* fall through to offline */
@@ -219,12 +244,13 @@ export async function boot(): Promise<void> {
     }
     app.set({ online: false });
   } finally {
-    app.set({ booted: true });
+    window.clearTimeout(notice);
+    app.set({ booted: true, waking: false });
   }
 }
 
-export async function refreshMe(): Promise<MeResponse> {
-  const me = await api<MeResponse>('GET', '/api/me');
+export async function refreshMe(timeoutMs?: number): Promise<MeResponse> {
+  const me = await api<MeResponse>('GET', '/api/me', undefined, timeoutMs ? { timeoutMs } : {});
   app.set({
     user: me.user,
     wallet: me.wallet,

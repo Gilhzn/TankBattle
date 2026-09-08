@@ -258,6 +258,41 @@ describe('accounts, friends and profiles over HTTP', () => {
       expect(inbox.body.incoming[0].user.nickname).toBe('LinkOpener');
     });
 
+    it('mints an absolute link without anyone configuring the deployment address', async () => {
+      // The link travels through WhatsApp, where a relative path has nothing to resolve against.
+      // No PUBLIC_URL is set on this test server, so this proves the request-derived fallback works.
+      const a = await guest(server, 'AbsoluteLinker');
+      const res = await a.call<{ url: string; text: string }>('GET', '/api/friends/invite');
+      expect(res.body.url).toMatch(/^https?:\/\/[^/]+\/#\/invite\//);
+      expect(new URL(res.body.url).origin).toBe(new URL(server.url).origin);
+      expect(res.body.text).toContain(res.body.url);
+    });
+
+    it('does not double the slash when the configured address has a trailing one', async () => {
+      // `https://host//#/invite/...` is read as protocol-relative and points at a host that is not
+      // there, so the trailing slash has to be trimmed rather than trusted.
+      const withSlash = await startTestServer({ config: { publicUrl: 'https://example.test/' } });
+      try {
+        const a = await guest(withSlash, 'SlashTrimmer');
+        const res = await a.call<{ url: string }>('GET', '/api/friends/invite');
+        expect(res.body.url).toMatch(/^https:\/\/example\.test\/#\/invite\//);
+        expect(res.body.url).not.toContain('//#/');
+      } finally {
+        await withSlash.close();
+      }
+    });
+
+    it('lets an explicitly configured address win over the request', async () => {
+      const configured = await startTestServer({ config: { publicUrl: 'https://tanks.example' } });
+      try {
+        const a = await guest(configured, 'ConfiguredHost');
+        const res = await a.call<{ url: string }>('GET', '/api/friends/invite');
+        expect(new URL(res.body.url).origin).toBe('https://tanks.example');
+      } finally {
+        await configured.close();
+      }
+    });
+
     it('rejects a tampered code', async () => {
       const a = await guest(server, 'HonestSharer');
       const b = await guest(server);

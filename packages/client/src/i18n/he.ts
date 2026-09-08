@@ -290,6 +290,7 @@ export const he: Partial<Record<TranslationKey, string>> = {
   'err.invalidCode': 'קוד חדר לא תקין',
   'err.roomFull': 'החדר מלא',
   'err.roomNotFound': 'החדר לא נמצא',
+  'app.waking': 'מעיר את השרת\u2026 בתוכנית החינמית זה יכול לקחת רגע.',
   'menu.friends': 'חברים',
   'menu.profile': 'פרופיל',
   // ---------- friends ----------

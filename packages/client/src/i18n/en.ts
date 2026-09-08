@@ -304,6 +304,7 @@ export const en = {
   'err.invalidCode': 'Invalid room code',
   'err.roomFull': 'Room is full',
   'err.roomNotFound': 'Room not found',
+  'app.waking': 'Waking the server up\u2026 this can take a moment on the free plan.',
   'menu.friends': 'Friends',
   'menu.profile': 'Profile',
   // ---------- friends ----------

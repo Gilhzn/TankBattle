@@ -27,6 +27,23 @@ export interface Ctx {
 
 export type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 
+/**
+ * The externally visible origin of this request, e.g. `https://tank1990.onrender.com`.
+ *
+ * Derived from the proxy headers every PaaS sets, so links the server mints are absolute without
+ * anyone having to configure the deployment's own address. `PUBLIC_URL` still overrides it, for the
+ * cases the request cannot answer — a custom domain in front of the host, or a link built outside
+ * of any request. Returns '' when there is no usable Host header at all.
+ */
+export function requestOrigin(ctx: Ctx): string {
+  const first = (v: string | string[] | undefined): string => (Array.isArray(v) ? (v[0] ?? '') : (v ?? '')).split(',')[0].trim();
+  const host = first(ctx.headers['x-forwarded-host']) || first(ctx.headers.host);
+  if (!host) return '';
+  // A proxy terminates TLS, so the socket itself always looks like plain http from in here.
+  const proto = first(ctx.headers['x-forwarded-proto']) || 'http';
+  return `${proto}://${host}`;
+}
+
 export interface RouteOptions {
   /** Default true. */
   auth?: boolean;

@@ -180,11 +180,18 @@ export class FriendsService {
     return `${Buffer.from(body).toString('base64url')}.${mac}`;
   }
 
-  createInvite(userId: string): { code: string; url: string; whatsappUrl: string; text: string; expiresAt: number } {
+  /**
+   * A shareable invite. `origin` is the address this request arrived on; it is what makes the link
+   * absolute, which matters because the link travels through WhatsApp, where a relative path is
+   * not just ugly but unusable — the recipient has nothing to resolve it against.
+   */
+  createInvite(userId: string, origin = ''): { code: string; url: string; whatsappUrl: string; text: string; expiresAt: number } {
     const now = this.deps.clock();
     const code = this.sign(userId, now);
     const nickname = this.deps.db.users.get(userId)?.nickname ?? '';
-    const base = this.deps.publicUrl ?? '';
+    // A trailing slash would make this `//#/invite/...`, which browsers read as protocol-relative
+    // and point at a host that does not exist.
+    const base = (this.deps.publicUrl || origin || '').replace(/\/+$/, '');
     const url = `${base}/#/invite/${code}`;
     const text = `${nickname} wants to battle you in Tank 1990! ${url}`;
     return {

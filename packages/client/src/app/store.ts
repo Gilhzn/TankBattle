@@ -53,6 +53,8 @@ export interface AppState {
   screen: string;
   booted: boolean;
   online: boolean;
+  /** Boot is taking long enough to say something — a sleeping free-tier host waking up. */
+  waking: boolean;
   token: string | null;
   user: UserDTO | null;
   wallet: WalletDTO;
@@ -70,6 +72,7 @@ export const app = new Store<AppState>({
   screen: 'boot',
   booted: false,
   online: false,
+  waking: false,
   token: null,
   user: null,
   wallet: { coins: 0, gems: 0 },

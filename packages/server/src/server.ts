@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import type { App } from './app.js';
@@ -103,6 +103,12 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   const clock: Clock = opts.clock ?? (() => Date.now());
   const db = openDb(config.dbPath, log);
   log.info(`database: ${db.kind} (${config.dbPath})`);
+  // A relative path lives in the container's writable layer, which most hosts throw away on every
+  // restart and deploy. That is a legitimate choice for a free tier, but it should never be a
+  // surprise — accounts, friends lists, ratings and wallets all go with it.
+  if (config.dbPath !== ':memory:' && !isAbsolute(config.dbPath.replace(/^json:/, ''))) {
+    log.warn(`DB_PATH=${config.dbPath} is a relative path: if this host has no persistent disk mounted, all accounts, friends and ratings reset on every restart`);
+  }
 
   const users = new UserService(db, config.secret, clock);
   const presence = new Presence(clock);

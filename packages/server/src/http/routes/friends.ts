@@ -1,6 +1,6 @@
 import { friendRequestSchema, inviteAcceptSchema } from '@tank/shared';
 import type { App } from '../../app.js';
-import { parseBody, type Router } from '../router.js';
+import { parseBody, requestOrigin, type Router } from '../router.js';
 
 export function registerFriendRoutes(r: Router, app: App): void {
   /** The whole friends screen in one call: the list plus both directions of pending requests. */
@@ -33,7 +33,7 @@ export function registerFriendRoutes(r: Router, app: App): void {
   }, { cost: 2 });
 
   /** A shareable invite link, plus the wa.me URL that opens WhatsApp with it pre-filled. */
-  r.get('/api/friends/invite', (ctx) => app.friends.createInvite(ctx.user.id), { cost: 2 });
+  r.get('/api/friends/invite', (ctx) => app.friends.createInvite(ctx.user.id, requestOrigin(ctx)), { cost: 2 });
 
   /** Opening someone's invite link: sends the request back to whoever shared it. */
   r.post('/api/friends/invite/accept', (ctx) => {

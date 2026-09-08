@@ -1,9 +1,17 @@
 # Render blueprint for the full game, multiplayer included.
 # Render keeps a long-running Node process and proxies WebSockets, which the game server needs.
 #
-# Persistence: the free plan has no persistent disk, so accounts and wallets reset when the
-# service restarts. To keep them, move to a paid instance, uncomment the `disk` block below and
-# change DB_PATH to /var/data/tank.db so the database lives on that volume.
+# This blueprint is deliberately on the free plan. Two consequences, both accepted:
+#
+#   1. No persistent disk. The database lives in the container's writable layer, so every account,
+#      friendship, rating and wallet is lost on each restart and each deploy. The server logs a
+#      warning at boot saying exactly this.
+#   2. The service sleeps after ~15 minutes idle and takes 30-60s to wake. The client's boot budget
+#      is sized for that and shows a "waking up" notice, so a cold open reaches the menu rather
+#      than falsely reporting the player offline.
+#
+# To keep data: switch `plan` to `starter`, uncomment the `disk` block at the bottom, and set
+# DB_PATH to /var/data/tank.db. That is the whole change.
 services:
   - type: web
     name: tank1990
@@ -22,10 +30,21 @@ services:
       # Signs the guest session tokens; Render generates it once and keeps it across deploys.
       - key: SECRET
         generateValue: true
-      # Relative to the service's working directory, which is writable on every plan.
-      # When enabling the disk below, change this to /var/data/tank.db.
+      # Relative to the service's working directory. Writable on every plan, but not persistent
+      # without the disk below — see the note at the top.
       - key: DB_PATH
         value: .data/tank.db
+      # How long a ranked player waits for a human before the game fills the match itself.
+      - key: MATCHMAKING_TIMEOUT_MS
+        value: "20000"
+      # PUBLIC_URL is intentionally unset: the server derives its own origin from the request, so
+      # invite links are absolute with no configuration. Set it only if a custom domain or an extra
+      # proxy sits in front of this service. No trailing slash.
+      #
+      # Optional, each unlocks one feature and the game runs fine without them:
+      #   GOOGLE_CLIENT_ID  — "Continue with Google" on the sign-in screen
+      #   MAIL_PROVIDER / MAIL_API_KEY / MAIL_FROM — actually emails the sign-in codes
+      #   BOT_CHAT_API_KEY  — LLM replies from filled seats instead of the built-in responder
     # disk:
     #   name: data
     #   mountPath: /var/data
