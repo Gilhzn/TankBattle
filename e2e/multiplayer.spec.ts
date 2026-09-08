@@ -50,3 +50,43 @@ test('a deathmatch starts anyway when the fourth player never turns up', async (
 
   await ctx.close();
 });
+
+test('four players fit the HUD without eating the map', async ({ browser }) => {
+  test.setTimeout(90_000);
+  // A phone viewport, because that is where a HUD row costs map: the field is sized from whatever
+  // height the HUD leaves behind.
+  const contexts = [];
+  const pages = [];
+  for (let i = 0; i < 4; i++) {
+    const ctx = await browser.newContext({ viewport: { width: 412, height: 740 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    await page.goto('/#/lobby');
+    await page.getByTestId('queue-ffa').click();
+    contexts.push(ctx);
+    pages.push(page);
+  }
+  const a = pages[0];
+  await expect(a.getByTestId('game-canvas')).toBeVisible({ timeout: 30_000 });
+  await waitForTicks(a, 10);
+
+  const hud = await a.evaluate(() => {
+    const strip = document.querySelector('.hud-lives')!.getBoundingClientRect();
+    const canvas = document.querySelector('.game-canvas')!.getBoundingClientRect();
+    return {
+      chips: document.querySelectorAll('.hud-player').length,
+      stripHeight: Math.round(strip.height),
+      hudHeight: Math.round(document.querySelector('.hud')!.getBoundingClientRect().height),
+      canvasWidth: Math.round(canvas.width),
+      scrollsSideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+  expect(hud.chips).toBe(4);
+  // One chip per player stacked full-width was 131px of strip and 203px of HUD; the map was 278px
+  // wide on this viewport. The numbers are what the player actually feels here, so assert them.
+  expect(hud.stripHeight).toBeLessThanOrEqual(80);
+  expect(hud.hudHeight).toBeLessThanOrEqual(140);
+  expect(hud.canvasWidth).toBe(412);
+  expect(hud.scrollsSideways).toBe(false);
+
+  for (const ctx of contexts) await ctx.close();
+});

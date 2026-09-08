@@ -248,8 +248,11 @@ html[dir='rtl'] .btn.back .chev {
   user-select: none;
   -webkit-user-select: none;
 }
+/* The control band is floored by what it has to hold — the player's own joystick size plus room
+   around it — rather than by a share of the screen. A fixed 35dvh floor was taking height the map
+   could use on a phone, where the map is the thing you are looking at. */
 .game-screen.touch {
-  grid-template-rows: auto minmax(0, 1fr) minmax(35dvh, auto);
+  grid-template-rows: auto minmax(0, 1fr) minmax(calc(var(--joystick-size) + var(--space-6)), auto);
 }
 .field-wrap {
   grid-area: field;
@@ -284,6 +287,15 @@ html[dir='rtl'] .btn.back .chev {
   min-height: 32px;
   flex-wrap: wrap;
 }
+/* The player strip takes the room that is left; the consumables sit beside it when they fit and
+   drop below it when they do not, rather than squeezing the names. */
+.hud-row.hud-bottom {
+  gap: var(--space-2);
+}
+.hud-row.hud-bottom > .hud-effects,
+.hud-row.hud-bottom > .hud-items {
+  flex: 0 0 auto;
+}
 .hud-stage {
   color: var(--amber);
   letter-spacing: 0.06em;
@@ -291,9 +303,9 @@ html[dir='rtl'] .btn.back .chev {
 }
 .hud-enemies {
   display: flex;
-  flex-wrap: wrap;
   gap: 3px;
   max-width: 45%;
+  overflow: hidden;
 }
 .enemy-icon {
   display: inline-block;
@@ -342,30 +354,71 @@ html[dir='rtl'] .btn.back .chev {
 .hud-pause {
   margin-inline-start: auto;
 }
+/* Equal columns wide enough to hold a whole nickname, as many per row as fit. Four players on a
+   phone become two rows of two — 44px of HUD instead of the 131px that four full-width chips used
+   to take. HUD height is map height (the field is sized from what the HUD leaves behind), so this
+   is what gives the map the full width of the screen back. */
 .hud-lives {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  /* Wide enough that the consumables wrap under the strip rather than squeezing the names into a
+     single narrow column. */
+  flex: 1 1 320px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 4px;
 }
 .hud-player {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
+  flex-wrap: nowrap;
+  gap: 0 6px;
+  min-width: 0;
+  padding: 1px 6px;
   border-radius: 8px;
   border-inline-start: 3px solid var(--pc, var(--amber));
   background: rgba(255, 255, 255, 0.05);
   font-variant-numeric: tabular-nums;
+  line-height: 1.35;
 }
 .hud-player.me {
   background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px var(--pc, var(--amber));
 }
 .hud-player-name {
+  flex: 1 1 max-content;
+  min-width: 0;
   color: var(--pc, var(--amber));
-  max-width: 9ch;
+  font-size: var(--fs-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* The page is RTL in Hebrew, which would put the ellipsis on the *start* of a Latin nickname —
+     two players called NightBadger13 and NightBadger14 would both read "…Badger1x". `plaintext`
+     gives each name its own direction, so it is always the tail that goes. */
+  unicode-bidi: plaintext;
+}
+.hud-player-stats {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.hud-player-score {
+  color: var(--fg-muted);
+}
+/* The score sits next to two other numbers; a separator stops "☠0 0" reading as one value. */
+.hud-player-sep {
+  color: var(--fg-faint);
+}
+/* Where there is height to spare, a chip becomes two lines rather than cut a name short: flex wrap
+   sizes the name by its own content first, so a long nickname pushes the numbers under it and then
+   gets the chip's whole width. On a short screen the map keeps the height instead and a long name
+   ends in an ellipsis, with the whole of it on the element's title. */
+@media (min-height: 700px) {
+  .hud-player {
+    flex-wrap: wrap;
+  }
 }
 .hud-player-lives {
   color: var(--danger);
@@ -561,15 +614,24 @@ html[dir='rtl'] .btn.back .chev {
   .field-wrap {
     height: 100%;
   }
+  /* The HUD floats over the arena here, so every line of it is a line of map you cannot see. It
+     spans the whole window rather than the field, because in landscape the space either side of the
+     square arena is empty — the player strip fits there on one row instead of two over the map. */
   .hud {
     position: absolute;
     top: var(--safe-top);
     left: 50%;
     transform: translateX(-50%);
-    width: var(--field-size);
-    max-width: 100%;
+    width: 100%;
     background: linear-gradient(180deg, rgba(7, 9, 15, 0.85), rgba(7, 9, 15, 0));
     pointer-events: none;
+  }
+  /* The pause button stays over the arena: pushed out to the window's edge it would sit inside the
+     fire zone, where a missed shot becomes a paused game. */
+  .hud-row.hud-top {
+    width: var(--field-size);
+    max-width: 100%;
+    margin-inline: auto;
   }
   .hud button {
     pointer-events: auto;

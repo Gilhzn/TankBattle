@@ -82,7 +82,9 @@ export class Hud {
       clear(this.enemiesEl);
       this.enemiesEl.dataset.count = String(remaining);
       this.enemiesEl.title = `${t('hud.enemies')}: ${remaining}`;
-      const shown = Math.min(remaining, 20);
+      // Ten pips is as many as a phone's HUD row fits; past that the count carries it, so the row
+      // never wraps and steals height from the map.
+      const shown = Math.min(remaining, 10);
       for (let i = 0; i < shown; i++) this.enemiesEl.appendChild(h('i', { class: 'enemy-icon' }));
       if (remaining > shown) this.enemiesEl.appendChild(h('span', { class: 'enemy-more' }, `+${remaining - shown}`));
     }
@@ -103,6 +105,7 @@ export class Hud {
         if (!p.active) continue;
         const skin = SKINS[p.skin && p.skin !== 'default' ? p.skin : ALLY_KEYS[p.slot] ?? 'default'] ?? SKINS.default;
         const isMe = p.slot === info.mySlot;
+        const name = isMe && info.mode === 'local' ? t('common.you') : p.name || `P${p.slot + 1}`;
         this.livesEl.appendChild(
           h(
             'div',
@@ -114,14 +117,22 @@ export class Hud {
               style: { '--pc': skin.primary } as unknown as Partial<CSSStyleDeclaration>,
               dataset: { slot: String(p.slot), lives: String(p.lives) },
             },
-            h('span', { class: 'hud-player-name' }, isMe && info.mode === 'local' ? t('common.you') : p.name || `P${p.slot + 1}`),
-            // Versus lives are now finite, so they matter as much as the kill count: show both.
+            // Two lines: the name gets the chip's full width, the numbers sit under it. With four
+            // players the chips are narrow, and a name on its own line stays readable where a name
+            // competing with three numbers would not.
+            h('span', { class: 'hud-player-name', attrs: { title: name } }, name),
             h(
               'span',
-              { class: 'hud-player-lives', attrs: { 'aria-label': t('hud.lives') } },
-              view.mode === 'versus' ? `♥ ${p.lives} · ☠ ${p.kills}` : `♥ ${p.lives}`,
+              { class: 'hud-player-stats' },
+              // Versus lives are now finite, so they matter as much as the kill count: show both.
+              h(
+                'span',
+                { class: 'hud-player-lives', attrs: { 'aria-label': t('hud.lives') } },
+                view.mode === 'versus' ? `♥${p.lives} ☠${p.kills}` : `♥${p.lives}`,
+              ),
+              h('span', { class: 'hud-player-sep' }, '·'),
+              h('span', { class: 'hud-player-score' }, p.score.toLocaleString()),
             ),
-            h('span', { class: 'hud-player-score' }, p.score.toLocaleString()),
           ),
         );
       }
