@@ -544,7 +544,14 @@ export function drawTankSprite(ctx: Ctx2D, size: number, o: TankSpriteOptions): 
  * Screen-space marker drawn over a player tank (never rotated with the hull), so a player can
  * never be read as an AI tank. `self` gives the local player a filled double chevron + ring.
  */
-export function drawPlayerMarker(ctx: Ctx2D, half: number, color: string, self: boolean, pulse: number): void {
+/**
+ * The "this one is a player" marker: chevrons above the hull, doubled for the local player.
+ *
+ * There used to be a pulsing ring on the ground under the local player too. It was a permanent
+ * circle around your own tank in every mode, which read as clutter rather than information — the
+ * chevrons already say which tank is yours, and in solo there is nothing to disambiguate at all.
+ */
+export function drawPlayerMarker(ctx: Ctx2D, half: number, color: string, self: boolean): void {
   const w = half * 0.42;
   const y = -half - half * 0.3; // sits clear of the barrel tip
   ctx.save();
@@ -572,15 +579,6 @@ export function drawPlayerMarker(ctx: Ctx2D, half: number, color: string, self: 
   ctx.strokeStyle = color;
   ctx.lineWidth = Math.max(1.2, half * 0.11);
   stack();
-  if (self) {
-    // the local player also gets a pulsing ground ring
-    ctx.globalAlpha = 0.45 + 0.2 * pulse;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, half * 0.08);
-    ctx.beginPath();
-    ctx.arc(0, 0, half * 1.2, 0, Math.PI * 2);
-    ctx.stroke();
-  }
   ctx.restore();
 }
 

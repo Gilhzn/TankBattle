@@ -229,10 +229,7 @@ export class Renderer {
       ctx.rotate(this.tankAngle(id, dir, dt, opts.reducedMotion));
       ctx.drawImage(sprite, -sw / 2, -sw / 2);
       ctx.restore();
-      if (isPlayer) {
-        const pulse = opts.reducedMotion ? 1 : 0.5 + 0.5 * Math.sin(time / 260);
-        drawPlayerMarker(ctx, half, palette.glow, owner === opts.mySlot, pulse);
-      }
+      if (isPlayer) drawPlayerMarker(ctx, half, palette.glow, owner === opts.mySlot);
       if (flags & TankFlag.FROZEN) {
         ctx.fillStyle = rgba(COLORS.cyan, 0.32);
         roundRect(ctx, -half, -half, half * 2, half * 2, half * 0.3);
