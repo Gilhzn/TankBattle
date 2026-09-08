@@ -88,5 +88,25 @@ test('four players fit the HUD without eating the map', async ({ browser }) => {
   expect(hud.canvasWidth).toBe(412);
   expect(hud.scrollsSideways).toBe(false);
 
+  // Turned sideways the arena is a square in a wide window, and the HUD moves into the empty
+  // gutters either side of it. Nothing it draws may end up on top of the map.
+  await a.setViewportSize({ width: 740, height: 412 });
+  await a.waitForTimeout(600);
+  const landscape = await a.evaluate(() => {
+    const canvas = document.querySelector('.game-canvas')!.getBoundingClientRect();
+    const over: string[] = [];
+    for (const el of document.querySelectorAll('.hud-row, .hud-player, .hud-btn, .hud-stage, .hud-enemies')) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const w = Math.min(r.right, canvas.right) - Math.max(r.left, canvas.left);
+      const h = Math.min(r.bottom, canvas.bottom) - Math.max(r.top, canvas.top);
+      if (w > 1 && h > 1) over.push(el.className.trim());
+    }
+    return { over, chips: document.querySelectorAll('.hud-player').length, canvasWidth: Math.round(canvas.width) };
+  });
+  expect(landscape.chips).toBe(4);
+  expect(landscape.over).toEqual([]);
+  expect(landscape.canvasWidth).toBe(412);
+
   for (const ctx of contexts) await ctx.close();
 });

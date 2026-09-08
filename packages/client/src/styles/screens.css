@@ -614,24 +614,74 @@ html[dir='rtl'] .btn.back .chev {
   .field-wrap {
     height: 100%;
   }
-  /* The HUD floats over the arena here, so every line of it is a line of map you cannot see. It
-     spans the whole window rather than the field, because in landscape the space either side of the
-     square arena is empty — the player strip fits there on one row instead of two over the map. */
+  /*
+   * Landscape puts a square arena in a wide window, which leaves a broad empty gutter down each
+   * side — the same gutters the joystick and the fire button float in. The HUD lives there: three
+   * columns, with the middle one exactly the width of the field and deliberately empty, so no part
+   * of the HUD is ever drawn over the map.
+   */
   .hud {
     position: absolute;
     top: var(--safe-top);
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     width: 100%;
-    background: linear-gradient(180deg, rgba(7, 9, 15, 0.85), rgba(7, 9, 15, 0));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--field-size) minmax(0, 1fr);
+    align-items: start;
+    gap: 0;
+    padding: var(--space-2);
+    background: none;
     pointer-events: none;
   }
-  /* The pause button stays over the arena: pushed out to the window's edge it would sit inside the
-     fire zone, where a missed shot becomes a paused game. */
+  /* Stage, enemies, clock, ping and pause in the near gutter... */
   .hud-row.hud-top {
-    width: var(--field-size);
-    max-width: 100%;
-    margin-inline: auto;
+    grid-column: 1;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+  /* ...and the players stacked down the far one, one full-width chip each, so four names fit. */
+  .hud-row.hud-bottom {
+    grid-column: 3;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+  .hud-lives {
+    grid-template-columns: minmax(0, 1fr);
+    flex: 0 0 auto;
+    width: 100%;
+  }
+  /* The gutter is narrow, so the chips buy back what they can: tighter padding, and no separator
+     between the kills and the score. */
+  .hud-player {
+    padding-inline: 4px;
+    gap: 0 4px;
+  }
+  .hud-player-stats {
+    gap: 4px;
+  }
+  .hud-player-sep {
+    display: none;
+  }
+  /*
+   * With one or two players there is room below for a chip to take two lines, which shows the whole
+   * name. With three or four there is not: the strip would run into the joystick, so those names
+   * shorten instead and carry the full one on their title.
+   */
+  .hud-lives:not(:has(> .hud-player:nth-child(3))) .hud-player {
+    flex-wrap: wrap;
+  }
+  /* The gutter is the pips' own column, so they may use all of it and wrap rather than be clipped
+     to a bar by the share-of-the-row cap portrait needs. */
+  .hud-enemies {
+    max-width: none;
+    flex-wrap: wrap;
+  }
+  .hud-items {
+    align-self: flex-end;
+  }
+  .hud-pause {
+    margin-inline-start: 0;
   }
   .hud button {
     pointer-events: auto;
