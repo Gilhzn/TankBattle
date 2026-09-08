@@ -1,6 +1,6 @@
 import {
-  BASE_TILE_X, BASE_TILE_Y, CATALOG_BY_SKU, TILE, applySnapshot, createViewState,
-  type MatchResult, type PowerUpKind, type Snapshot, type TickEvent, type ViewState,
+  BASE_TILE_X, BASE_TILE_Y, CATALOG_BY_SKU, TILE, TankFlag, applySnapshot, createViewState,
+  type MatchResult, type PowerUpKind, type Snapshot, type TankDTO, type TickEvent, type ViewState,
 } from '@tank/shared';
 import { h } from '../app/h.js';
 import { settings, hasTouchInput } from '../app/settings.js';
@@ -15,6 +15,7 @@ import { COLORS, tankPalette } from '../render/theme.js';
 import { POWERUP_COLORS } from '../render/sprites.js';
 import { Hud } from './hud.js';
 import { InterpBuffer } from './interp.js';
+import { Predictor, type PredictedTank } from './predict.js';
 
 export interface GameOverInfo {
   reason: string;
@@ -72,6 +73,9 @@ export class GameView {
   private stageName = '';
   private bannerTimer = 0;
   private itemCounts: Record<string, number> = {};
+  /** Runs the local player's own tank ahead of the server, so the thumb feels connected to it. */
+  private predictor = new Predictor();
+  private predicted: (PredictedTank & { id: number }) | null = null;
 
   constructor(private opts: GameViewOptions) {
     const tr = opts.transport;
@@ -103,7 +107,14 @@ export class GameView {
     this.input = new InputManager({
       touchLayer: this.touchLayer,
       touch: { size: () => settings.get().joystickSize, haptics: () => settings.get().haptics },
-      onChange: (inp) => tr.sendInput(inp),
+      onChange: (inp) => {
+        // The predictor is told first: it must know the intent from the tick the player gave it,
+        // not from the tick the acknowledgement comes back on.
+        // Floored: the intent belongs to the tick that is running now, not the next one — a whole
+        // tick of delay is 33 ms the player can feel.
+        this.predictor.push(inp, Math.floor(this.predictTick(performance.now())));
+        tr.sendInput(inp);
+      },
       onPause: () => this.togglePause(),
     });
     this.itemCounts = tr.itemCounts();
@@ -139,6 +150,9 @@ export class GameView {
         const tank = this.view.tanks.find((t) => t[0] === id);
         if (!tank) return null;
         const rt = this.interp.renderTick(performance.now());
+        // Report what is actually drawn — for the local tank that is the prediction, which is the
+        // whole point of it.
+        if (this.predicted && this.predicted.id === id) return { x: this.predicted.x, y: this.predicted.y, rt };
         const p = this.interp.tankPos(id, rt, { x: tank[3], y: tank[4] });
         return { x: p.x, y: p.y, rt };
       },
@@ -166,16 +180,49 @@ export class GameView {
     }
   };
 
+  /**
+   * The local simulation tick: the tick the server will be applying our input on. The interpolation
+   * clock is a round trip behind the server (snapshots arrive late), so the lead adds it back.
+   */
+  private predictTick(now: number): number {
+    const clock = this.interp.renderTick(now) + this.interp.effectiveDelay;
+    const rtt = this.opts.transport.mode === 'online' ? this.opts.transport.rtt : 0;
+    return clock + Predictor.leadTicks(rtt);
+  }
+
+  /** Where to draw our own tank this frame: our own simulation, corrected by the server's word. */
+  private updatePrediction(now: number, dt: number): void {
+    this.predicted = null;
+    if (this.paused || this.view.status !== 'playing') return;
+    const slot = this.opts.transport.mySlot;
+    const mine = (this.view.tanks as TankDTO[]).find((t) => t[2] === 'player' && t[1] === slot);
+    if (!mine) {
+      this.predictor.reset();
+      return;
+    }
+    // A tank still materialising is not under the player's control yet.
+    if ((mine[9] & TankFlag.SPAWNING) !== 0) {
+      this.predictor.reset();
+      return;
+    }
+    const anchor = this.interp.latestTankPos(mine[0]);
+    if (!anchor) return;
+    const p = this.predictor.predict(this.view, mine, anchor, this.predictTick(now), dt);
+    if (p) this.predicted = { ...p, id: mine[0] };
+  }
+
   private frame = (now: number): void => {
     if (!this.running) return;
     const dt = Math.min(100, now - this.lastFrame);
     this.lastFrame = now;
     this.input.poll();
     if (!this.paused) this.effects.update(dt);
+    this.updatePrediction(now, dt);
     this.renderer.draw(this.view, this.interp, this.effects, now, {
       mySlot: this.opts.transport.mySlot,
       reducedMotion: settings.get().reducedMotion,
       powerUpLabel: (k: PowerUpKind) => t(`pu.${k}`),
+      local: this.predicted,
     });
     this.hud.update(this.view, {
       rtt: this.opts.transport.mode === 'online' ? this.opts.transport.rtt : null,

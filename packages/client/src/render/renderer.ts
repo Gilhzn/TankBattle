@@ -14,6 +14,8 @@ export interface RenderOptions {
   mySlot: number;
   reducedMotion: boolean;
   powerUpLabel: (kind: PowerUpKind) => string;
+  /** The local player's own tank, simulated ahead of the server so it answers the input at once. */
+  local?: { id: number; x: number; y: number; dir: number; moving: boolean } | null;
 }
 
 const MAX_DPR = 2;
@@ -208,7 +210,9 @@ export class Renderer {
     const half = (TANK_SIZE * s) / 2;
     for (const t of view.tanks as TankDTO[]) {
       const [id, owner, kind, tx, ty, dir, tier, hp, maxHp, flags, skin] = t;
-      const pos = interp.tankPos(id, rt, { x: tx, y: ty });
+      // The local player's tank is drawn from the prediction; everyone else from the playout buffer.
+      const local = opts.local && opts.local.id === id ? opts.local : null;
+      const pos = local ?? interp.tankPos(id, rt, { x: tx, y: ty });
       const cx = pos.x * s + half;
       const cy = pos.y * s + half;
       const spawning = (flags & TankFlag.SPAWNING) !== 0;
@@ -220,13 +224,13 @@ export class Renderer {
         continue;
       }
       const isPlayer = kind === 'player';
-      const moving = (flags & TankFlag.MOVING) !== 0;
+      const moving = local ? local.moving : (flags & TankFlag.MOVING) !== 0;
       const frame = moving ? Math.floor(time / 90) % 2 : 0;
       const palette = tankPalette(kind, owner, skin, hp, maxHp);
       const sprite = this.tankSprite(palette, isPlayer, frame, isPlayer ? tier : 0);
       const sw = sprite.width;
       ctx.save();
-      ctx.rotate(this.tankAngle(id, dir, dt, opts.reducedMotion));
+      ctx.rotate(this.tankAngle(id, local ? local.dir : dir, dt, opts.reducedMotion));
       ctx.drawImage(sprite, -sw / 2, -sw / 2);
       ctx.restore();
       if (isPlayer) drawPlayerMarker(ctx, half, palette.glow, owner === opts.mySlot);

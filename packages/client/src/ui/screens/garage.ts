@@ -50,10 +50,14 @@ export function garageScreen(root: HTMLElement): () => void {
       skinsEl.appendChild(
         h(
           'button',
-          { class: `chip-btn skin ${isEquipped ? 'selected' : ''} ${previewSkin === sku ? 'previewing' : ''}`, type: 'button', dataset: { testid: `skin-${sku}` }, onclick: () => { previewSkin = sku; renderPreview(); render(); } },
+          { class: `chip-btn skin has-status ${isEquipped ? 'selected' : ''} ${previewSkin === sku ? 'previewing' : ''}`, type: 'button', dataset: { testid: `skin-${sku}` }, onclick: () => { previewSkin = sku; renderPreview(); render(); } },
+          // The status sits on its own line at the top of the card: inline, it had nothing left to
+          // shrink in a 160px column and spilled out over the card's own border.
+          isEquipped
+            ? h('span', { class: 'chip ready chip-status' }, t('common.equipped'))
+            : h('span', { class: 'link chip-status', onclick: (e: Event) => { e.stopPropagation(); void equip(sku); } }, t('common.equip')),
           tankPreview(sku, 44),
-          h('span', null, sku === 'default' ? t('garage.default') : displayName(sku)),
-          isEquipped ? h('span', { class: 'chip ready' }, t('common.equipped')) : h('span', { class: 'link', onclick: (e: Event) => { e.stopPropagation(); void equip(sku); } }, t('common.equip')),
+          h('span', { class: 'chip-body' }, sku === 'default' ? t('garage.default') : displayName(sku)),
         ),
       );
     }
@@ -62,14 +66,30 @@ export function garageScreen(root: HTMLElement): () => void {
     if (!trails.length) trailsEl.appendChild(emptyState(t('garage.empty')));
     for (const sku of trails) {
       trailsEl.appendChild(
-        h('div', { class: `chip-btn ${inv[sku].equipped ? 'selected' : ''}` }, itemIcon(sku), h('span', null, displayName(sku)), inv[sku].equipped ? h('span', { class: 'chip ready' }, t('common.equipped')) : button(t('common.equip'), { kind: 'ghost', className: 'small', onClick: () => void equip(sku) })),
+        h(
+          'div',
+          { class: `chip-btn has-status ${inv[sku].equipped ? 'selected' : ''}` },
+          inv[sku].equipped
+            ? h('span', { class: 'chip ready chip-status' }, t('common.equipped'))
+            : button(t('common.equip'), { kind: 'ghost', className: 'small chip-status', onClick: () => void equip(sku) }),
+          itemIcon(sku),
+          h('span', { class: 'chip-body' }, displayName(sku)),
+        ),
       );
     }
     clear(boostsEl);
     const boosts = CATALOG.filter((i) => i.kind === 'boost' && (inv[i.sku]?.qty ?? 0) > 0);
     if (!boosts.length) boostsEl.appendChild(emptyState(t('garage.empty')));
     for (const item of boosts) {
-      boostsEl.appendChild(h('div', { class: 'chip-btn' }, itemIcon(item.sku), h('span', null, displayName(item.sku), h('small', { class: 'muted' }, itemDesc(item.sku, item.description))), h('span', { class: 'chip' }, `×${inv[item.sku].qty}`)));
+      boostsEl.appendChild(
+        h(
+          'div',
+          { class: 'chip-btn has-status' },
+          h('span', { class: 'chip chip-status' }, `×${inv[item.sku].qty}`),
+          itemIcon(item.sku),
+          h('span', { class: 'chip-body' }, displayName(item.sku), h('small', { class: 'muted' }, itemDesc(item.sku, item.description))),
+        ),
+      );
     }
     clear(loadoutEl);
     const cur = settings.get().soloLoadout.filter((sku) => (inv[sku]?.qty ?? 0) > 0);
@@ -80,7 +100,8 @@ export function garageScreen(root: HTMLElement): () => void {
         h(
           'button',
           {
-            class: `chip-btn ${selected ? 'selected' : ''}`,
+            // `has-status` only when there is a status to place, or the card keeps an empty row.
+            class: `chip-btn ${selected ? 'has-status selected' : ''}`,
             type: 'button',
             dataset: { testid: `loadout-${item.sku}` },
             onclick: () => {
@@ -90,9 +111,9 @@ export function garageScreen(root: HTMLElement): () => void {
               render();
             },
           },
+          selected ? h('span', { class: 'chip ready chip-status' }, '✓') : null,
           itemIcon(item.sku),
-          h('span', null, displayName(item.sku)),
-          selected ? h('span', { class: 'chip ready' }, '✓') : null,
+          h('span', { class: 'chip-body' }, displayName(item.sku)),
         ),
       );
     }

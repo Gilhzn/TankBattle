@@ -438,7 +438,7 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
 }
 .chip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--space-2);
 }
 /* An empty state describes the whole section, so it spans the grid rather than sitting in one cell. */
@@ -460,6 +460,43 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
 }
 .chip-btn > span:first-of-type {
   flex: 1;
+  min-width: 0;
+}
+/*
+ * A card that carries a status (equipped, a count, an equip action) puts it on its own line at the
+ * top. Inline, the status had nothing left to shrink — an icon, a one-word name and a `nowrap` pill
+ * add up to more than a 160px grid column — so it used to spill out past the card's own border.
+ */
+.chip-btn.has-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'status status'
+    'icon body';
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.chip-btn.has-status > .chip-status {
+  grid-area: status;
+  justify-self: end;
+  margin: 0;
+}
+.chip-btn.has-status > .item-icon,
+.chip-btn.has-status > .tank-preview {
+  grid-area: icon;
+}
+.chip-btn.has-status > .chip-body {
+  grid-area: body;
+  min-width: 0;
+}
+/* Long item names shorten instead of widening the card past its column. */
+.chip-btn .chip-body {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-btn .chip-body > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chip-btn.selected {
   border-color: var(--cyan);

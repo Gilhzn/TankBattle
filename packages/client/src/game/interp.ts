@@ -238,6 +238,18 @@ export class InterpBuffer {
   tankPos(id: number, rt: number, fallback: Pos): Pos {
     return this.sample('tanks', id, rt, fallback);
   }
+
+  /**
+   * The newest position the server actually sent for a tank, and the tick it belongs to. This is the
+   * anchor prediction replays from: everything after it is the client's own guess.
+   */
+  latestTankPos(id: number): { tick: number; x: number; y: number } | null {
+    for (let i = this.frames.length - 1; i >= 0; i--) {
+      const p = this.frames[i].tanks.get(id);
+      if (p) return { tick: this.frames[i].t, x: p.x, y: p.y };
+    }
+    return null;
+  }
   bulletPos(id: number, rt: number, fallback: Pos): Pos {
     return this.sample('bullets', id, rt, fallback);
   }

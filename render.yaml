@@ -17,6 +17,14 @@ services:
     name: tank1990
     runtime: node
     plan: free
+    # Where the server runs, which is most of what a player feels: from Israel, Oregon is ~240 ms
+    # round trip and Frankfurt ~70 ms. The client predicts its own tank so the controls stay crisp
+    # either way, but everything the other player does still arrives a round trip late.
+    #
+    # Render cannot move a service after it is created, so changing this only affects a service
+    # created fresh from this blueprint. On the free plan the database is ephemeral anyway, so
+    # recreating costs nothing but the URL.
+    region: frankfurt
     healthCheckPath: /api/health
     # --include=dev is required: NODE_ENV=production below applies to the build too, and npm then
     # skips devDependencies — which is where typescript and vite live, so the build would fail.

@@ -14,7 +14,12 @@ export interface GameStartInfo {
   yourSlot: number;
 }
 
-const HEARTBEAT_MS = TICK_MS * 10;
+/**
+ * How often the current input is re-sent when it has not changed. It is a safety net for a dropped
+ * packet, and since the local tank is now predicted, a dropped input is a visible correction rather
+ * than a moment of nothing happening — so the net is drawn tighter than the 10 ticks it used to be.
+ */
+const HEARTBEAT_MS = TICK_MS * 5;
 const PING_MS = 5000;
 const SEAT_KEY = 'tank.seat';
 
