@@ -43,6 +43,8 @@ declare global {
       renderPos?: (id: number) => { x: number; y: number; rt: number } | null;
       /** Playout diagnostics: effective delay in ticks, measured jitter, buffered frames. */
       interpStats?: () => { delay: number; jitterMs: number; renderTick: number; latestTick: number; frames: number };
+      /** Memory diagnostics: JS heap plus the canvas bytes the renderer holds. */
+      mem?: () => { heap: number; canvas: number; tiles: number; sprites: number; spriteCount: number; total: number };
     };
   }
 }
@@ -158,6 +160,10 @@ export class GameView {
         return { x: p.x, y: p.y, rt };
       },
       interpStats: () => this.interp.stats,
+      mem: () => {
+        const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+        return { heap: perf.memory?.usedJSHeapSize ?? 0, ...this.renderer.memory() };
+      },
     };
   }
 
@@ -447,6 +453,11 @@ export class GameView {
     for (const u of this.unsubs) u();
     this.unsubs = [];
     this.el.remove();
-    if (window.__tank && window.__tank.view === this.view) window.__tank.screen = 'closed';
+    // The debug hook closes over this view. Left in place it keeps the renderer, its canvases, the
+    // interpolation buffer and the particle pool alive for as long as the player stays in the menu —
+    // about 8 MB of canvas on a phone. Swap in the same stub the app uses outside a match.
+    if (window.__tank && window.__tank.view === this.view) {
+      window.__tank = { view: undefined as never, tick: 0, mode: this.opts.transport.mode, screen: 'closed', input: () => undefined };
+    }
   }
 }

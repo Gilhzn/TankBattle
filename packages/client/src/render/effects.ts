@@ -161,10 +161,20 @@ export class Effects {
   }
 
   /** Current shake offset in device px (≤ 4 px at full power). */
+  /** Reused: this is read once per frame and the pair is never held on to. */
+  private shakeOut: [number, number] = [0, 0];
+
   shakeOffset(): [number, number] {
-    if (this.shakePower <= 0.01) return [0, 0];
+    const out = this.shakeOut;
+    if (this.shakePower <= 0.01) {
+      out[0] = 0;
+      out[1] = 0;
+      return out;
+    }
     const amp = Math.min(4, 4 * this.shakePower);
-    return [Math.sin(this.shakeT * 0.09) * amp, Math.cos(this.shakeT * 0.07) * amp];
+    out[0] = Math.sin(this.shakeT * 0.09) * amp;
+    out[1] = Math.cos(this.shakeT * 0.07) * amp;
+    return out;
   }
 
   update(dt: number): void {

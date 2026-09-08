@@ -44,6 +44,12 @@ export class SpriteCache {
   get size(): number {
     return this.map.size;
   }
+  /** Backing-store bytes held by the cache (4 bytes per pixel), for the memory diagnostics. */
+  get bytes(): number {
+    let n = 0;
+    for (const c of this.map.values()) n += c.width * c.height * 4;
+    return n;
+  }
 }
 
 export function roundRect(ctx: Ctx2D, x: number, y: number, w: number, h: number, r: number): void {

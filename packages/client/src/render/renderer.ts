@@ -27,6 +27,11 @@ const TAU = Math.PI * 2;
  */
 const TURN_TAU_MS = 36;
 
+/** Which of `drawTile`'s seven foliage looks a tile has. Mirrors the seed inside `drawTile`. */
+function treeSeed(tx: number, ty: number): number {
+  return (tx * 73 + ty * 151) % 7;
+}
+
 /** Shortest signed angular difference, in (-PI, PI]. */
 function angleDelta(from: number, to: number): number {
   return ((((to - from) % TAU) + TAU + Math.PI) % TAU) - Math.PI;
@@ -37,15 +42,20 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private sprites = new SpriteCache();
   private tileLayer: AnyCanvas | null = null;
-  private treesLayer: AnyCanvas | null = null;
   private tilesCopy = new Uint8Array(GRID * GRID);
   private tilesValid = false;
   private waterTiles: number[] = [];
-  private hasTrees = false;
+  /** Tiles carrying foliage, drawn over the tanks from seven cached tile sprites. */
+  private treeTiles: number[] = [];
+  /** Those seven sprites, by seed, resolved when the map is built so the draw loop only blits. */
+  private treeSprites: Array<AnyCanvas | undefined> = [];
   /** Eased render angle per tank id (visual only). Entries are pruned when a tank disappears. */
   private angles = new Map<number, { a: number; seen: number }>();
   private frameSeq = 0;
   private lastTime = 0;
+  /** Scratch pairs for entity sampling: the draw loop asks for a position per entity per frame. */
+  private posOut = { x: 0, y: 0 };
+  private posFallback = { x: 0, y: 0 };
   size = 0; // device px (square)
   scale = 1;
   dpr = 1;
@@ -69,8 +79,20 @@ export class Renderer {
     this.scale = size / FIELD;
     this.sprites.clear();
     this.tileLayer = null;
-    this.treesLayer = null;
+    this.treeSprites = [];
     this.tilesValid = false;
+  }
+
+  /**
+   * What the renderer is holding, in bytes of canvas backing store — the part of the game's memory
+   * that is not JavaScript heap and so does not show up in a heap snapshot.
+   */
+  memory(): { canvas: number; tiles: number; sprites: number; spriteCount: number; total: number } {
+    const area = (c: AnyCanvas | null): number => (c ? c.width * c.height * 4 : 0);
+    const canvas = this.size * this.size * 4;
+    const tiles = area(this.tileLayer);
+    const sprites = this.sprites.bytes;
+    return { canvas, tiles, sprites, spriteCount: this.sprites.size, total: canvas + tiles + sprites };
   }
 
   /** Force the tile layer to rebuild (e.g. after a full snapshot). */
@@ -87,9 +109,7 @@ export class Renderer {
   private rebuildTiles(tiles: Uint8Array): void {
     const size = this.size;
     if (!this.tileLayer) this.tileLayer = makeCanvas(size, size);
-    if (!this.treesLayer) this.treesLayer = makeCanvas(size, size);
     const g = ctxOf(this.tileLayer);
-    const tctx = ctxOf(this.treesLayer);
     const ts = TILE * this.scale;
     // ground
     g.fillStyle = COLORS.bg;
@@ -121,9 +141,10 @@ export class Renderer {
     }
     g.stroke();
 
-    tctx.clearRect(0, 0, size, size);
     this.waterTiles = [];
-    this.hasTrees = false;
+    this.treeTiles = [];
+    this.treeSprites = [];
+    const treePx = Math.ceil(ts);
     for (let ty = 0; ty < GRID; ty++) {
       for (let tx = 0; tx < GRID; tx++) {
         const i = ty * GRID + tx;
@@ -134,9 +155,16 @@ export class Renderer {
           if (tx === BASE_TILE_X && ty === BASE_TILE_Y) drawBase(g, x, y, ts * 2, t === Tile.BASE_DEAD);
           continue;
         }
+        // Foliage is drawn over the tanks each frame, from a sprite per look — a whole second
+        // full-screen buffer for a handful of tiles is memory the game never needed.
         if (t === Tile.TREES) {
-          this.hasTrees = true;
-          drawTile(tctx, t, x, y, ts, tx, ty);
+          this.treeTiles.push(i);
+          // `drawTile` gives the tile one of seven looks from its coordinates; resolve each look
+          // once here so the per-frame pass is a blit and nothing else.
+          const seed = treeSeed(tx, ty);
+          if (!this.treeSprites[seed]) {
+            this.treeSprites[seed] = this.sprites.get(`trees|${seed}`, treePx, treePx, (c) => drawTile(c, Tile.TREES, 0, 0, ts, tx, ty));
+          }
           continue;
         }
         if (t === Tile.WATER) this.waterTiles.push(i);
@@ -145,6 +173,22 @@ export class Renderer {
     }
     this.tilesCopy.set(tiles);
     this.tilesValid = true;
+  }
+
+  /** The canopy, over the tanks: one blit per foliage tile, from the seven sprites built with the map. */
+  private drawTrees(): void {
+    if (!this.treeTiles.length) return;
+    const ctx = this.ctx;
+    const ts = TILE * this.scale;
+    ctx.save();
+    ctx.globalAlpha = 0.88;
+    for (const i of this.treeTiles) {
+      const tx = i % GRID;
+      const ty = (i - tx) / GRID;
+      const sprite = this.treeSprites[treeSeed(tx, ty)];
+      if (sprite) ctx.drawImage(sprite, tx * ts, ty * ts);
+    }
+    ctx.restore();
   }
 
   private drawWater(time: number): void {
@@ -212,7 +256,9 @@ export class Renderer {
       const [id, owner, kind, tx, ty, dir, tier, hp, maxHp, flags, skin] = t;
       // The local player's tank is drawn from the prediction; everyone else from the playout buffer.
       const local = opts.local && opts.local.id === id ? opts.local : null;
-      const pos = local ?? interp.tankPos(id, rt, { x: tx, y: ty });
+      this.posFallback.x = tx;
+      this.posFallback.y = ty;
+      const pos = local ?? interp.tankPos(id, rt, this.posFallback, this.posOut);
       const cx = pos.x * s + half;
       const cy = pos.y * s + half;
       const spawning = (flags & TankFlag.SPAWNING) !== 0;
@@ -317,7 +363,9 @@ export class Renderer {
     ctx.globalCompositeOperation = 'lighter';
     for (const b of view.bullets as BulletDTO[]) {
       const [id, bx, by, dir, fromPlayer] = b;
-      const pos = interp.bulletPos(id, rt, { x: bx, y: by });
+      this.posFallback.x = bx;
+      this.posFallback.y = by;
+      const pos = interp.bulletPos(id, rt, this.posFallback, this.posOut);
       const cx = pos.x * s + half;
       const cy = pos.y * s + half;
       const dx = dir === 1 ? -1 : dir === 3 ? 1 : 0;
@@ -399,11 +447,7 @@ export class Renderer {
     this.drawTanks(view, interp, rt, time, dt, opts);
     this.drawBullets(view, interp, rt);
     effects.draw(ctx, this.scale, Math.max(10, TILE * this.scale * 0.7));
-    if (this.hasTrees && this.treesLayer) {
-      ctx.globalAlpha = 0.88;
-      ctx.drawImage(this.treesLayer, 0, 0);
-      ctx.globalAlpha = 1;
-    }
+    this.drawTrees();
     this.drawPowerUp(view, time, opts.powerUpLabel);
 
     if (view.effects.freeze > 0) {

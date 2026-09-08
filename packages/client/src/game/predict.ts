@@ -41,6 +41,13 @@ export class Predictor {
   private inputs: StampedInput[] = [{ tick: 0, dir: -1, fire: false }];
   private shown: { x: number; y: number } | null = null;
   private lastDir: Dir = 0;
+  /**
+   * Reused across frames: prediction runs every frame, and the obstacle list, the world it reads and
+   * the tank being placed would otherwise be a fresh set of objects sixty times a second.
+   */
+  private others: Array<{ x: number; y: number }> = [];
+  private world: MoveWorld = { tiles: new Uint8Array(0), tanks: this.others };
+  private self = { x: 0, y: 0, dir: 0 as Dir, ship: false };
   /** Tick of the anchor the last prediction started from, for the tests and the debug hook. */
   lastAnchorTick = -1;
   lastPredictTick = -1;
@@ -103,10 +110,23 @@ export class Predictor {
     const ticks = Math.min(MAX_REPLAY_TICKS, Math.max(0, Math.floor(predictTick) - anchor.tick));
     // Everyone else stands where the last snapshot put them: they are the obstacles, and their own
     // motion inside one replay is far smaller than the tank we are placing.
-    const others: Array<{ x: number; y: number }> = [];
-    for (const t of view.tanks as TankDTO[]) if (t[0] !== id) others.push({ x: t[3], y: t[4] });
-    const world: MoveWorld = { tiles: view.tiles, tanks: others };
-    const self = { x: anchor.x, y: anchor.y, dir: myTank[5] as Dir, ship: (myTank[9] & TankFlag.SHIP) !== 0 };
+    const others = this.others;
+    let n = 0;
+    for (const t of view.tanks as TankDTO[]) {
+      if (t[0] === id) continue;
+      const slot = others[n] ?? (others[n] = { x: 0, y: 0 });
+      slot.x = t[3];
+      slot.y = t[4];
+      n++;
+    }
+    others.length = n;
+    const world = this.world;
+    world.tiles = view.tiles;
+    const self = this.self;
+    self.x = anchor.x;
+    self.y = anchor.y;
+    self.dir = myTank[5] as Dir;
+    self.ship = (myTank[9] & TankFlag.SHIP) !== 0;
 
     let moving = false;
     const frozen = view.effects.playerFreeze > 0;
@@ -133,6 +153,8 @@ export class Predictor {
       shown.x += (self.x - shown.x) * k;
       shown.y += (self.y - shown.y) * k;
     }
+    // The result itself is a fresh object: it is one per frame, and callers do compare the last one
+    // with the next.
     return { x: this.shown!.x, y: this.shown!.y, dir: this.lastDir, moving };
   }
 }

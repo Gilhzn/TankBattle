@@ -202,7 +202,24 @@ export class InterpBuffer {
     return [a, b];
   }
 
-  private sample(kind: 'tanks' | 'bullets', id: number, rt: number, fallback: Pos): Pos {
+  /**
+   * `out`, when given, receives the result instead of a fresh object. The draw loop samples every
+   * entity every frame, and a pair of numbers per entity per frame is garbage the collector has to
+   * come back for — on a phone that is a stutter, not a saving.
+   */
+  private sample(kind: 'tanks' | 'bullets', id: number, rt: number, fallback: Pos, out?: Pos): Pos {
+    const give = (p: Pos): Pos => {
+      if (!out) return p;
+      out.x = p.x;
+      out.y = p.y;
+      return out;
+    };
+    const at = (x: number, y: number): Pos => {
+      if (!out) return { x, y };
+      out.x = x;
+      out.y = y;
+      return out;
+    };
     const [ai, bi] = this.bounds(rt);
     const a = ai >= 0 ? this.frames[ai] : null;
     const b = bi >= 0 ? this.frames[bi] : null;
@@ -210,10 +227,10 @@ export class InterpBuffer {
     const pb = b?.[kind].get(id);
     const snapAt = kind === 'tanks' ? SNAP_DISTANCE : BULLET_SNAP_DISTANCE;
     if (pa && pb && a && b) {
-      if (a === b || b.t === a.t) return pb;
-      if (Math.abs(pb.x - pa.x) > snapAt || Math.abs(pb.y - pa.y) > snapAt) return pb;
+      if (a === b || b.t === a.t) return give(pb);
+      if (Math.abs(pb.x - pa.x) > snapAt || Math.abs(pb.y - pa.y) > snapAt) return give(pb);
       const f = (rt - a.t) / (b.t - a.t);
-      return { x: pa.x + (pb.x - pa.x) * f, y: pa.y + (pb.y - pa.y) * f };
+      return at(pa.x + (pb.x - pa.x) * f, pa.y + (pb.y - pa.y) * f);
     }
     // Past the newest snapshot (the buffer ran dry): carry the last known velocity forward for at
     // most MAX_EXTRAP_TICKS and EXTRAP_MAX_DIST, which turns a frozen frame into a short glide.
@@ -228,15 +245,15 @@ export class InterpBuffer {
           const dt = Math.min(rt - a.t, MAX_EXTRAP_TICKS);
           const dx = clamp(vx * dt, -EXTRAP_MAX_DIST, EXTRAP_MAX_DIST);
           const dy = clamp(vy * dt, -EXTRAP_MAX_DIST, EXTRAP_MAX_DIST);
-          return { x: pa.x + dx, y: pa.y + dy };
+          return at(pa.x + dx, pa.y + dy);
         }
       }
     }
-    return pb ?? pa ?? fallback;
+    return give(pb ?? pa ?? fallback);
   }
 
-  tankPos(id: number, rt: number, fallback: Pos): Pos {
-    return this.sample('tanks', id, rt, fallback);
+  tankPos(id: number, rt: number, fallback: Pos, out?: Pos): Pos {
+    return this.sample('tanks', id, rt, fallback, out);
   }
 
   /**
@@ -250,7 +267,7 @@ export class InterpBuffer {
     }
     return null;
   }
-  bulletPos(id: number, rt: number, fallback: Pos): Pos {
-    return this.sample('bullets', id, rt, fallback);
+  bulletPos(id: number, rt: number, fallback: Pos, out?: Pos): Pos {
+    return this.sample('bullets', id, rt, fallback, out);
   }
 }
