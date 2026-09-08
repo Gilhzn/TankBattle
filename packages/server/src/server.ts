@@ -141,7 +141,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     quickPlayWaitMs: opts.quickPlayWaitMs,
     disconnectGraceMs: opts.disconnectGraceMs,
     createRunner: (room) =>
-      new GameRunner(room, { inventory, wallet, results, ranking, log: log.child('game'), tickRate: config.tickRate, snapshotEvery: config.snapshotEvery, fullSnapshotEvery: config.fullSnapshotEvery }),
+      new GameRunner(room, {
+        inventory, wallet, results, ranking, log: log.child('game'),
+        tickRate: config.tickRate,
+        // Versus streams every tick rather than every other one. Half a snapshot interval of
+        // staleness is what decides a duel, and against a person you are aiming at where they were.
+        // Co-op keeps the lower rate: more entities per snapshot, and nobody to out-aim.
+        snapshotEvery: room.mode === 'versus' ? 1 : config.snapshotEvery,
+        fullSnapshotEvery: config.fullSnapshotEvery,
+      }),
   });
 
   const authenticate = (token: string): UserRow | null => {

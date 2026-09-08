@@ -82,9 +82,10 @@ export class GameView {
     // The simulation is a fixed 30 Hz, so rendering its latest state directly shows each position
     // for two or more display frames and reads as stutter. One tick of delay lets the renderer
     // interpolate between the last two states, which costs ~33 ms of latency and buys smooth motion
-    // at any refresh rate. Online starts from 3 ticks (100 ms, 1.5 snapshot intervals) and the buffer
-    // grows itself from there when the link is jittery, so it needs room for more history.
-    this.interp = new InterpBuffer(tr.mode === 'local' ? 1 : 3, tr.mode === 'local' ? 6 : 14);
+    // at any refresh rate. Online starts from 2 ticks — versus streams a snapshot every tick, so
+    // that is still two whole intervals of cushion — and the adaptive margin in the buffer grows it
+    // by itself when a link turns jittery, so it needs room for more history.
+    this.interp = new InterpBuffer(tr.mode === 'local' ? 1 : 2, tr.mode === 'local' ? 6 : 14);
     this.effects = new Effects(() => settings.get().reducedMotion);
     this.canvas = h('canvas', { class: 'game-canvas', dataset: { testid: 'game-canvas' }, attrs: { 'aria-label': 'battlefield' } });
     this.renderer = new Renderer(this.canvas);

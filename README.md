@@ -98,6 +98,7 @@ packages/server   Node http + ws: auth, rooms/matchmaking, 30 Hz authoritative l
 packages/client   Vite + TypeScript canvas client: renderer, touch/keyboard/gamepad input, screens, PWA
 e2e               Playwright tests (desktop, mobile emulation, two-browser multiplayer, PWA)
 docs/API.md       REST + WebSocket contract
+docs/DEPLOY.md    where to host the server, and why the region decides the ping
 ```
 
 ## Deploying
@@ -109,7 +110,10 @@ Vercel runs serverless functions, which cannot hold the long-lived WebSocket con
 **Full game, multiplayer included.** `packages/server` is a long-running Node process (WebSocket + REST + SQLite) and needs a host that keeps a process alive — Render, Railway, Fly.io, or any VPS. It serves the built client itself, so one service covers everything.
 
 - **Render** — `render.yaml` is a blueprint: point Render at the repo, and it installs, builds, starts
-  the server, health-checks `/api/health` and generates `SECRET`. It ships on the free plan, which
+  the server, health-checks `/api/health` and generates `SECRET`. It deploys to **Frankfurt**,
+  because the region is most of what a player feels: from Israel that is ~70 ms of ping instead of
+  ~230 ms from Render's default US region. Render cannot move an existing service between regions,
+  so see [docs/DEPLOY.md](docs/DEPLOY.md) for what that means in practice. It ships on the free plan, which
   means two things worth knowing: the database has no persistent disk, so every account, friendship,
   rating and wallet resets on each restart and deploy (the server warns about this at boot); and the
   service sleeps after ~15 minutes idle and takes 30-60s to wake, which the client handles by

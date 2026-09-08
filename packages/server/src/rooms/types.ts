@@ -9,6 +9,12 @@ export interface PlayerLink {
    * players itself, and a session that does not know which room it is in rejects their own input.
    */
   bindRoom?(room: Room): void;
+  /**
+   * Sends a message that has already been serialised. A room broadcasts the identical snapshot to
+   * every seat thirty times a second, and encoding it once instead of once per player is most of
+   * the tick budget back on a small instance.
+   */
+  sendRaw?(json: string): void;
 }
 
 export interface RoomUser {

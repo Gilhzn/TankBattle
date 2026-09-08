@@ -47,6 +47,11 @@ export class Session implements PlayerLink {
     if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(msg));
   }
 
+  /** The same, for a message the room has already serialised once for everybody. */
+  sendRaw(json: string): void {
+    if (this.ws.readyState === this.ws.OPEN) this.ws.send(json);
+  }
+
   /** The matchmaker seated this player: adopt the room so their input and chat are accepted. */
   bindRoom(room: Room): void {
     this.room = room;

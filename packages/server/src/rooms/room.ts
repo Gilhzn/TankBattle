@@ -330,8 +330,23 @@ export class Room {
     for (const p of this.players) p.link?.send(this.stateFor(p.id));
   }
 
+  /**
+   * One message to every seat. It is serialised once here rather than once inside each connection:
+   * a four-player match broadcasts the same snapshot thirty times a second, and doing that work per
+   * player is four times the JSON for no reason. A link that cannot take a pre-encoded string (the
+   * test sinks) still gets the object.
+   */
   broadcast(msg: ServerMessage, except?: string): void {
-    for (const p of this.players) if (p.id !== except) p.link?.send(msg);
+    let json: string | null = null;
+    for (const p of this.players) {
+      if (p.id === except || !p.link) continue;
+      if (!p.link.sendRaw) {
+        p.link.send(msg);
+        continue;
+      }
+      json ??= JSON.stringify(msg);
+      p.link.sendRaw(json);
+    }
   }
 
   destroy(): void {
