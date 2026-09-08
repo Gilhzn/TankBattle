@@ -4,6 +4,7 @@ import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { app, toast } from '../../app/store.js';
 import { t } from '../../i18n/index.js';
+import { ws } from '../../net/wsClient.js';
 import { awaitBoot, button, emptyState, offlineNotice, panel, screenShell, spinner, tabs } from '../components.js';
 
 type Tab = 'friends' | 'requests' | 'add';
@@ -58,12 +59,34 @@ export function friendsScreen(root: HTMLElement): () => void {
         ),
         h('span', { class: 'friend-rating' }, f.rating ? String(f.rating) : '—'),
       ),
+      // Playing with a specific person happens here, not on the multiplayer screen: the invitation
+      // carries the room, so neither of you ever reads a code out loud.
+      f.state === 'online'
+        ? button(t('friends.invite'), {
+            kind: 'primary',
+            className: 'small friend-invite',
+            testid: `friend-invite-${f.nickname}`,
+            onClick: () => void invite(f),
+          })
+        : null,
       button('✕', {
         kind: 'ghost',
         testid: `friend-remove-${f.nickname}`,
         onClick: () => void act(() => Api.friendRemove(f.id), t('friends.removed')),
       }),
     );
+
+  /** Opens a private room and sends the friend there. */
+  const invite = async (f: FriendDTO): Promise<void> => {
+    try {
+      await ws.connect();
+      ws.inviteFriend(f.id);
+      toast(t('friends.inviteSent', { name: f.nickname }), 'success');
+      navigate('/lobby');
+    } catch {
+      toast(t('friends.inviteOffline'), 'error');
+    }
+  };
 
   const requestRow = (r: FriendRequestDTO, kind: 'incoming' | 'outgoing'): HTMLElement =>
     h(

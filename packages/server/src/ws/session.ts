@@ -1,10 +1,10 @@
-import { PROTOCOL_VERSION, clientMessageSchema, type ClientMessage, type ServerMessage } from '@tank/shared';
+import { PROTOCOL_VERSION, clientMessageSchema, type ClientMessage, type MatchQueue, type ServerMessage } from '@tank/shared';
 import type { WebSocket } from 'ws';
 import type { UserRow } from '../db/repo.js';
 import type { Room } from '../rooms/room.js';
 import { RoomError, type PlayerLink, type RoomUser } from '../rooms/types.js';
 import { RateLimiter } from '../util/rateLimit.js';
-import type { GatewayDeps } from './gateway.js';
+import type { SessionDeps } from './gateway.js';
 
 export const HELLO_TIMEOUT_MS = 5000;
 const MSG_RATE = 60;
@@ -19,11 +19,13 @@ export class Session implements PlayerLink {
   private limiter: RateLimiter;
   private overflow = 0;
   private closed = false;
+  /** The queue this player is searching in, so cancelling can name it back to them. */
+  private queuedKind: MatchQueue | null = null;
 
   constructor(
     private readonly ws: WebSocket,
     readonly ip: string,
-    private readonly deps: GatewayDeps,
+    private readonly deps: SessionDeps,
     private readonly onAuth: (s: Session) => void,
     private readonly onClose: (s: Session) => void,
   ) {
@@ -43,6 +45,12 @@ export class Session implements PlayerLink {
 
   send(msg: ServerMessage): void {
     if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(msg));
+  }
+
+  /** The matchmaker seated this player: adopt the room so their input and chat are accepted. */
+  bindRoom(room: Room): void {
+    this.room = room;
+    this.queuedKind = null;
   }
 
   error(code: string, message: string): void {
@@ -154,13 +162,6 @@ export class Session implements PlayerLink {
         this.leaveCurrent();
         this.room = this.deps.rooms.join(this.roomUser(), this, msg.code, msg.loadout);
         return;
-      case 'quickPlay': {
-        this.leaveCurrent();
-        const { room } = this.deps.rooms.quickPlay(this.roomUser(), this, msg.mode, msg.loadout, msg.versusFormat);
-        this.room = room;
-        this.send({ type: 'matchFound', roomId: room.id });
-        return;
-      }
       case 'resume': {
         const room = this.deps.rooms.get(msg.roomId);
         if (!room) throw new RoomError('room_not_found', 'room no longer exists');
@@ -174,7 +175,7 @@ export class Session implements PlayerLink {
         this.deps.matchmaker.leave(user.id);
         this.send({ type: 'left' });
         return;
-      case 'rankedQueue': {
+      case 'matchQueue': {
         this.leaveCurrent();
         this.deps.matchmaker.enqueue({
           user: this.roomUser(),
@@ -182,16 +183,22 @@ export class Session implements PlayerLink {
           rating: this.deps.ranking.rating(user.id),
           country: user.country,
           lang: msg.lang,
-          format: msg.versusFormat,
+          queue: msg.queue,
           loadout: msg.loadout,
           queuedAt: this.deps.clock(),
         });
-        this.send({ type: 'queued', since: this.deps.clock(), searching: true });
+        this.queuedKind = msg.queue;
         return;
       }
-      case 'rankedCancel':
+      case 'matchCancel': {
+        const queue = this.queuedKind ?? '1v1';
         this.deps.matchmaker.leave(user.id);
-        this.send({ type: 'queued', since: this.deps.clock(), searching: false });
+        this.queuedKind = null;
+        this.send({ type: 'queued', queue, searching: false, since: this.deps.clock(), found: 0, needed: 0, startsInMs: 0 });
+        return;
+      }
+      case 'inviteFriend':
+        this.inviteFriend(user, msg.friendId);
         return;
       case 'setReady':
         this.requireRoom().setReady(user.id, msg.ready);
@@ -219,6 +226,28 @@ export class Session implements PlayerLink {
         return;
       }
     }
+  }
+
+  /**
+   * Opens a private room and tells a friend where it is. This is the one way to play with a
+   * specific person: no code is read out or typed in — the invitation carries it.
+   */
+  private inviteFriend(user: UserRow, friendId: string): void {
+    if (friendId === user.id) throw new RoomError('self_invite', 'you cannot invite yourself');
+    if (!this.deps.db.friends.has(user.id, friendId)) throw new RoomError('not_friends', 'not on your friends list');
+    // Reuse the room already open, so inviting a second friend does not strand the first.
+    const room = this.room?.isPrivate && this.room.joinable && this.room.player(user.id) ? this.room : this.openInviteRoom(user);
+    if (!this.deps.sendTo(friendId, { type: 'gameInvite', fromId: user.id, fromName: user.nickname, code: room.code })) {
+      throw new RoomError('friend_offline', 'they are not online right now');
+    }
+  }
+
+  private openInviteRoom(user: UserRow): Room {
+    this.leaveCurrent();
+    this.deps.matchmaker.leave(user.id);
+    const room = this.deps.rooms.create(this.roomUser(), this, 'versus', true, []);
+    this.room = room;
+    return room;
   }
 
   private hello(token: string, version: number): void {

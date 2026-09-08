@@ -16,7 +16,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `PORT=${PORT} DB_PATH=:memory: SECRET=e2e-secret node packages/server/dist/index.js`,
+    // The 20-second wait before a short-handed match starts is shortened here, so the test that
+    // covers it does not spend 20 seconds staring at a queue.
+    command: `PORT=${PORT} DB_PATH=:memory: SECRET=e2e-secret MATCHMAKING_TIMEOUT_MS=8000 node packages/server/dist/index.js`,
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,

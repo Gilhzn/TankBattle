@@ -1,17 +1,19 @@
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import type { UserRow } from '../db/repo.js';
+import type { Db, UserRow } from '../db/repo.js';
 import type { RoomManager } from '../rooms/roomManager.js';
 import type { Matchmaker } from '../rooms/matchmaker.js';
 import type { RankingService } from '../social/ranking.js';
 import type { Presence } from '../social/presence.js';
+import type { ServerMessage } from '@tank/shared';
 import type { Logger } from '../util/log.js';
 import type { Clock } from '../util/time.js';
 import { Session } from './session.js';
 
 export interface GatewayDeps {
   clock: Clock;
+  db: Db;
   log: Logger;
   rooms: RoomManager;
   matchmaker: Matchmaker;
@@ -24,6 +26,12 @@ export interface GatewayDeps {
   heartbeatMs?: number;
 }
 
+/** What a session sees: the gateway's own deps plus the ability to reach another player. */
+export interface SessionDeps extends GatewayDeps {
+  /** Sends to a user's live session. False when they are not connected. */
+  sendTo(userId: string, msg: ServerMessage): boolean;
+}
+
 /** Accepts `/ws` upgrades, tracks one live session per user and heartbeats sockets. */
 export class Gateway {
   private wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
@@ -31,7 +39,8 @@ export class Gateway {
   private all = new Set<Session>();
   private heartbeat: NodeJS.Timeout;
 
-  constructor(server: Server, deps: GatewayDeps) {
+  constructor(server: Server, gatewayDeps: GatewayDeps) {
+    const deps: SessionDeps = { ...gatewayDeps, sendTo: (userId, msg) => this.sendToUser(userId, msg) };
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (url.pathname !== '/ws') {
@@ -50,6 +59,14 @@ export class Gateway {
 
   get connections(): number {
     return this.all.size;
+  }
+
+  /** Pushes a message to whoever is logged in as `userId` right now. */
+  sendToUser(userId: string, msg: ServerMessage): boolean {
+    const s = this.sessions.get(userId);
+    if (!s) return false;
+    s.send(msg);
+    return true;
   }
 
   private onAuth(s: Session): void {

@@ -158,7 +158,10 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     log: log.child('ranked'),
     botTimeoutMs: config.matchmakingTimeoutMs,
     chatResponder,
-    onMatched: (ticket, room) => ticket.link.send({ type: 'matchFound', roomId: room.id }),
+    onMatched: (ticket, room) => {
+      ticket.link.bindRoom?.(room);
+      ticket.link.send({ type: 'matchFound', roomId: room.id });
+    },
   });
 
   const app: App = {
@@ -183,7 +186,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       });
   });
   const gateway = new Gateway(server, {
-    clock, log: log.child('ws'), rooms, matchmaker, ranking, presence,
+    clock, db, log: log.child('ws'), rooms, matchmaker, ranking, presence,
     tickRate: config.tickRate, snapshotRate: config.tickRate / config.snapshotEvery, authenticate,
   });
 

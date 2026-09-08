@@ -137,27 +137,67 @@ describe('rooms over websocket', () => {
     expect((await second.waitFor('pong')).t).toBe(42);
   });
 
-  it('quickPlay matches two players into one room and auto-starts', async () => {
+  it('puts two searchers into one match with nobody hosting and no code passed around', async () => {
     const u1 = await guest(server, 'QuickOne');
     const u2 = await guest(server, 'QuickTwo');
     const c1 = await connect(u1.token);
     const c2 = await connect(u2.token);
-    c1.send({ type: 'quickPlay', mode: 'versus', loadout: [] });
+    c1.send({ type: 'matchQueue', queue: '1v1', loadout: [], lang: 'en' });
+    // Alone in the queue, the first player is told how full the match is rather than left blank.
+    const progress = await c1.waitFor<{ found: number; needed: number } & AnyMsg>('queued');
+    expect(progress).toMatchObject({ found: 1, needed: 2, searching: true });
+    c2.send({ type: 'matchQueue', queue: '1v1', loadout: [], lang: 'en' });
     const found1 = await c1.waitFor<{ roomId: string } & AnyMsg>('matchFound');
-    c2.send({ type: 'quickPlay', mode: 'versus', loadout: [] });
     const found2 = await c2.waitFor<{ roomId: string } & AnyMsg>('matchFound');
     expect(found2.roomId).toBe(found1.roomId);
     const state = await c2.waitFor<RoomState>('roomState', (m) => m.players.length === 2);
     expect(state.mode).toBe('versus');
-    // Both ready → immediate auto start; otherwise the 500 ms quick-play timer kicks in.
-    c1.send({ type: 'setReady', ready: true });
-    c2.send({ type: 'setReady', ready: true });
+    // A matched room starts itself: neither player is asked to press anything.
     await c1.waitFor('gameStart', undefined, 4000);
     await c2.waitFor('gameStart', undefined, 4000);
     c1.send({ type: 'chat', text: 'gl hf' });
     const chat = await c2.waitFor('chat');
     expect(chat.text).toBe('gl hf');
     expect(chat.from).toBe(u1.id);
+  });
+
+  it('lets a player cancel the search', async () => {
+    const u = await guest(server, 'Wanderer');
+    const c = await connect(u.token);
+    c.send({ type: 'matchQueue', queue: 'ffa', loadout: [], lang: 'en' });
+    await c.waitFor('queued', (m) => (m as unknown as { searching: boolean }).searching);
+    c.send({ type: 'matchCancel' });
+    const stopped = await c.waitFor<{ searching: boolean } & AnyMsg>('queued', (m) => !(m as unknown as { searching: boolean }).searching);
+    expect(stopped.searching).toBe(false);
+  });
+
+  it('invites a friend into a private room, and refuses to invite a stranger', async () => {
+    const host = await guest(server, 'HostPal');
+    const pal = await guest(server, 'InvitedPal');
+    const stranger = await guest(server, 'StrangerPal');
+    const ch = await connect(host.token);
+    const cp = await connect(pal.token);
+    await connect(stranger.token);
+
+    // Not friends yet: the invitation is refused rather than reaching them.
+    ch.send({ type: 'inviteFriend', friendId: stranger.id });
+    expect((await ch.waitFor('error')).code).toBe('not_friends');
+
+    // A friend who is not connected cannot be pulled into a match either.
+    const away = await guest(server, 'AwayPal');
+    server.app.db.friends.link(host.id, away.id, Date.now());
+    ch.send({ type: 'inviteFriend', friendId: away.id });
+    expect((await ch.waitFor('error')).code).toBe('friend_offline');
+
+    server.app.db.friends.link(host.id, pal.id, Date.now());
+    ch.send({ type: 'inviteFriend', friendId: pal.id });
+    const invite = await cp.waitFor<{ fromName: string; code: string } & AnyMsg>('gameInvite');
+    expect(invite.fromName).toBe('HostPal');
+
+    // The invited player joins with the code the invitation carried — nobody typed it.
+    cp.send({ type: 'joinRoom', code: invite.code, loadout: [] });
+    const state = await cp.waitFor<RoomState>('roomState', (m) => m.players.length === 2);
+    expect(state.players.map((p) => p.id).sort()).toEqual([host.id, pal.id].sort());
   });
 
   it('health reports rooms and players', async () => {

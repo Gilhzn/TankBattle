@@ -1,4 +1,4 @@
-import { arenaIndexForRating, STARTING_RATING, type VersusFormat } from '@tank/shared';
+import { arenaIndexForRating, MATCH_QUEUES, STARTING_RATING, type MatchQueue } from '@tank/shared';
 import { skillForRating, VersusBot } from '../game/bot.js';
 import { botName, regionFor } from '../game/botNames.js';
 import type { ChatResponder } from '../game/botChat.js';
@@ -22,7 +22,7 @@ export interface Ticket {
   rating: number;
   country: string;
   lang: 'en' | 'he';
-  format: VersusFormat;
+  queue: MatchQueue;
   loadout: string[];
   queuedAt: number;
 }
@@ -31,7 +31,7 @@ export interface MatchmakerDeps {
   rooms: RoomManager;
   clock: Clock;
   log: Logger;
-  /** Wait before the game fills the match itself. */
+  /** How long a search waits for a full match before starting with whoever is there. */
   botTimeoutMs: number;
   /** Chat voice given to bots. */
   chatResponder: ChatResponder;
@@ -40,12 +40,12 @@ export interface MatchmakerDeps {
 }
 
 /**
- * Ranked matchmaking.
+ * Matchmaking: the only way into a public game.
  *
- * Players queue with their rating and are paired with the closest opponent inside a window that
- * widens the longer they wait, so a strong player is not held forever waiting for their exact peer.
- * If nobody suitable turns up within the configured wait, the game fills the seat itself rather
- * than leaving someone staring at a spinner.
+ * A player picks a queue — 1v1, 2v2, deathmatch or co-op — and is grouped with the closest-rated
+ * players searching for the same thing, inside a window that widens the longer they wait. If the
+ * seats have not filled by `botTimeoutMs` the match starts anyway with whoever is present, and only
+ * the seats still missing below the queue's minimum are filled by the game.
  */
 export class Matchmaker {
   private queue: Ticket[] = [];
@@ -69,19 +69,33 @@ export class Matchmaker {
     return this.queue.length;
   }
 
-  /** Adds a player to the ranked queue, replacing any ticket they already had. */
+  /** How many players are searching for one kind of match. */
+  waiting(kind: MatchQueue): number {
+    return this.queue.filter((t) => t.queue === kind).length;
+  }
+
+  /** Adds a player to the queue, replacing any ticket they already had. */
   enqueue(ticket: Ticket): void {
-    this.leave(ticket.user.id);
+    const previous = this.leaveTicket(ticket.user.id);
     this.queue.push(ticket);
     this.start();
-    // Try straight away: two players arriving together should not wait for the next sweep.
+    // Try straight away: players arriving together should not wait for the next sweep.
     this.pump();
+    // The pump may already have taken this ticket into a match; only tell the ones still waiting.
+    this.notify(ticket.queue);
+    if (previous && previous.queue !== ticket.queue) this.notify(previous.queue);
   }
 
   leave(userId: string): boolean {
-    const before = this.queue.length;
-    this.queue = this.queue.filter((t) => t.user.id !== userId);
-    return this.queue.length !== before;
+    const gone = this.leaveTicket(userId);
+    if (gone) this.notify(gone.queue);
+    return !!gone;
+  }
+
+  private leaveTicket(userId: string): Ticket | null {
+    const found = this.queue.find((t) => t.user.id === userId) ?? null;
+    if (found) this.queue = this.queue.filter((t) => t !== found);
+    return found;
   }
 
   /** How wide `ticket`'s search has grown. */
@@ -90,20 +104,26 @@ export class Matchmaker {
     return Math.min(MAX_WINDOW, START_WINDOW + waitedSec * WIDEN_PER_SEC);
   }
 
-  /** The best opponent for `ticket` right now: the closest rating that is inside both windows. */
-  private bestOpponent(ticket: Ticket, now: number): Ticket | null {
-    let best: Ticket | null = null;
-    let bestGap = Infinity;
-    for (const other of this.queue) {
-      if (other === ticket || other.user.id === ticket.user.id) continue;
-      if (other.format !== ticket.format) continue;
-      const gap = Math.abs(other.rating - ticket.rating);
-      // Both players have to be willing to accept the gap, or the one who just queued would be
-      // dragged into a mismatch by someone who has been waiting a long time.
-      if (gap > this.window(ticket, now) || gap > this.window(other, now)) continue;
-      if (gap < bestGap) {
-        bestGap = gap;
-        best = other;
+  /**
+   * The best group for one queue right now: the closest-rated run of `size` players where every
+   * member accepts the spread. Requiring *mutual* consent is what stops someone who has waited a
+   * long time from dragging a player who just queued into a mismatch.
+   */
+  private tryForm(kind: MatchQueue, now: number): Ticket[] | null {
+    const need = MATCH_QUEUES[kind].size;
+    const list = this.queue.filter((t) => t.queue === kind).sort((a, b) => a.rating - b.rating);
+    if (list.length < need) return null;
+    let best: Ticket[] | null = null;
+    let bestWait = -1;
+    for (let i = 0; i + need <= list.length; i++) {
+      const group = list.slice(i, i + need);
+      const spread = group[need - 1].rating - group[0].rating;
+      if (group.some((t) => spread > this.window(t, now))) continue;
+      // Longest-waiting group first, so nobody is starved by a steady stream of new arrivals.
+      const wait = now - Math.min(...group.map((t) => t.queuedAt));
+      if (wait > bestWait) {
+        bestWait = wait;
+        best = group;
       }
     }
     return best;
@@ -111,54 +131,89 @@ export class Matchmaker {
 
   private pump(): void {
     const now = this.deps.clock();
-    // Longest-waiting first, so nobody is starved by a steady stream of new arrivals.
-    for (const ticket of [...this.queue].sort((a, b) => a.queuedAt - b.queuedAt)) {
-      if (!this.queue.includes(ticket)) continue;
-      const opponent = this.bestOpponent(ticket, now);
-      if (opponent) {
-        this.pair(ticket, opponent);
-        continue;
+    for (const kind of Object.keys(MATCH_QUEUES) as MatchQueue[]) {
+      let formed = false;
+      for (;;) {
+        const group = this.tryForm(kind, now);
+        if (!group) break;
+        this.form(group, kind);
+        formed = true;
       }
-      if (now - ticket.queuedAt >= this.deps.botTimeoutMs) this.fillWithBot(ticket);
+      // Anyone still here has waited out the search: start with whoever is present. Longest waiters
+      // first, and never more than the match has seats for — the rest keep searching.
+      const waiting = this.queue.filter((t) => t.queue === kind).sort((a, b) => a.queuedAt - b.queuedAt);
+      if (waiting.length > 0 && now - waiting[0].queuedAt >= this.deps.botTimeoutMs) {
+        this.form(waiting.slice(0, MATCH_QUEUES[kind].size), kind);
+        formed = true;
+      }
+      if (formed) this.notify(kind);
     }
   }
 
-  /** Opens a room for two queued players. */
-  private pair(a: Ticket, b: Ticket): void {
-    this.queue = this.queue.filter((t) => t !== a && t !== b);
-    // The arena comes from the pair's average rating, so both see a map that fits their level.
-    const stage = arenaIndexForRating(Math.round((a.rating + b.rating) / 2));
-    const room = this.deps.rooms.create(a.user, a.link, 'versus', true, a.loadout, true, 'normal', a.format, stage);
-    room.join(b.user, b.link, b.loadout);
-    this.deps.onMatched(a, room);
-    this.deps.onMatched(b, room);
-    this.deps.log.debug(`ranked: ${a.user.name} (${a.rating}) vs ${b.user.name} (${b.rating})`);
+  /**
+   * Opens a room for a group. A group short of the queue's minimum is topped up by the game, so a
+   * player who searched alone still gets a match rather than a spinner.
+   */
+  private form(group: Ticket[], kind: MatchQueue): void {
+    const def = MATCH_QUEUES[kind];
+    const taking = new Set(group);
+    this.queue = this.queue.filter((t) => !taking.has(t));
+
+    const seated = this.seatOrder(group, kind);
+    const first = seated[0];
+    const mean = Math.round(group.reduce((sum, t) => sum + t.rating, 0) / group.length);
+    // The arena comes from the group's rating, so everyone sees a map that fits their level.
+    const stage = def.mode === 'versus' ? arenaIndexForRating(mean) : 0;
+    const room = this.deps.rooms.create(first.user, first.link, def.mode, true, first.loadout, true, 'normal', def.versusFormat, stage);
+    for (const t of seated.slice(1)) room.join(t.user, t.link, t.loadout);
+    for (const t of seated) this.deps.onMatched(t, room);
+
+    const missing = Math.max(0, def.min - group.length);
+    for (let i = 0; i < missing; i++) this.addBot(room, mean, first.country, first.lang);
+
+    this.deps.log.debug(`match ${kind}: ${seated.map((t) => `${t.user.name}(${t.rating})`).join(', ')}${missing ? ` +${missing}` : ''}`);
     room.start();
   }
 
   /**
-   * Fills the other seat itself. The opponent is rated close to the human (a little either way, so
-   * the ladder still moves) and plays at that level; nothing on the wire distinguishes it from a
+   * The order seats are taken in, which is what decides the teams: `teamOf` is `slot % 2`, so slots
+   * 0/2 play slots 1/3. Pairing the weakest with the strongest against the two in the middle is the
+   * closest two teams can be made from four given ratings.
+   */
+  private seatOrder(group: Ticket[], kind: MatchQueue): Ticket[] {
+    if (kind !== '2v2' || group.length !== 4) return group;
+    const [a, b, c, d] = [...group].sort((x, y) => x.rating - y.rating);
+    return [a, b, d, c];
+  }
+
+  /**
+   * Fills a seat itself. The opponent is rated close to the humans (a little either way, so the
+   * ladder still moves) and plays at that level; nothing on the wire distinguishes it from a
    * person, which is the point — the alternative is telling someone there is nobody to play.
    */
-  private fillWithBot(ticket: Ticket): void {
-    this.queue = this.queue.filter((t) => t !== ticket);
-    const stage = arenaIndexForRating(ticket.rating);
-    const room = this.deps.rooms.create(ticket.user, ticket.link, 'versus', true, ticket.loadout, true, 'normal', ticket.format, stage);
-
+  private addBot(room: Room, mean: number, country: string, lang: 'en' | 'he'): void {
     // A believable opponent is near the player, not identical to them.
     const spread = 40;
-    const rating = Math.max(100, Math.round(ticket.rating + (Math.random() * 2 - 1) * spread));
+    const rating = Math.max(100, Math.round(mean + (Math.random() * 2 - 1) * spread));
     const taken = new Set(room.players.map((p) => p.name));
     room.addBot({
       id: `bot:${newId()}`,
-      name: botName(regionFor(ticket.country), taken),
+      name: botName(regionFor(country), taken),
       skin: 'default',
-      bot: { controller: new VersusBot(1, skillForRating(rating)), rating, chat: this.deps.chatResponder, lang: ticket.lang },
+      bot: { controller: new VersusBot(1, skillForRating(rating)), rating, chat: this.deps.chatResponder, lang },
     });
-    this.deps.onMatched(ticket, room);
-    this.deps.log.debug(`ranked: ${ticket.user.name} (${ticket.rating}) filled after ${this.deps.botTimeoutMs}ms`);
-    room.start();
+  }
+
+  /** Tells everyone still searching for `kind` how full their match is and how long is left. */
+  private notify(kind: MatchQueue): void {
+    const now = this.deps.clock();
+    const needed = MATCH_QUEUES[kind].size;
+    const waiting = this.queue.filter((t) => t.queue === kind);
+    const oldest = waiting.reduce((min, t) => Math.min(min, t.queuedAt), now);
+    const startsInMs = Math.max(0, this.deps.botTimeoutMs - (now - oldest));
+    for (const t of waiting) {
+      t.link.send({ type: 'queued', queue: kind, searching: true, since: t.queuedAt, found: waiting.length, needed, startsInMs });
+    }
   }
 
   /** The rating a seat plays at, for the result: a bot's is its assigned one. */

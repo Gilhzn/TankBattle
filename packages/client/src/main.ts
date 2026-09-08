@@ -10,7 +10,8 @@ import { route, setNotFound, startRouter, navigate } from './app/router.js';
 import { applyDocumentSettings, settings } from './app/settings.js';
 import { app, toast } from './app/store.js';
 import { onLangChange, setLang, t } from './i18n/index.js';
-import { toastHost } from './ui/components.js';
+import { button, modal, toastHost } from './ui/components.js';
+import { ws } from './net/wsClient.js';
 import { menuScreen } from './ui/screens/menu.js';
 import { playScreen } from './ui/screens/play.js';
 import { lobbyScreen } from './ui/screens/lobby.js';
@@ -55,6 +56,31 @@ setNotFound((root) => {
 });
 
 document.body.appendChild(toastHost());
+
+// A game invitation can arrive on any screen, so it is answered here rather than inside one.
+let openInvite: { close: () => void } | null = null;
+ws.server.on((msg) => {
+  if (msg.type !== 'gameInvite') return;
+  openInvite?.close();
+  const dialog = modal(
+    [
+      h('h2', null, t('invite.gameTitle', { name: msg.fromName })),
+      button(t('invite.gameJoin'), {
+        kind: 'primary',
+        big: true,
+        testid: 'invite-join',
+        onClick: () => {
+          dialog.close();
+          ws.joinRoom(msg.code, []);
+          navigate('/lobby');
+        },
+      }),
+      button(t('invite.gameDecline'), { kind: 'ghost', testid: 'invite-decline', onClick: () => dialog.close() }),
+    ],
+    { testid: 'invite-modal', onClose: () => (openInvite = null) },
+  );
+  openInvite = dialog;
+});
 
 // test hook: keep window.__tank.screen in sync even outside a match
 app.select(

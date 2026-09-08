@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, playerTank, TANK_SIZE, TILE, VERSUS_LIVES, type GameState, type Input } from '@tank/shared';
+import { createInitialState, playerTank, Rng, TANK_SIZE, TILE, VERSUS_LIVES, type GameState, type Input } from '@tank/shared';
 import { step } from '@tank/shared';
 import { skillForRating, VersusBot } from '../src/game/bot.js';
 import { botName, regionFor } from '../src/game/botNames.js';
@@ -143,7 +143,10 @@ describe('the bot plays the game', () => {
     // signal is how long it takes, not whether it happens.
     const ticksToWin = (rating: number, seed: number): number => {
       const s = createInitialState(seed, 0, DUEL, 'versus', 'normal', 'ffa');
-      const bot = new VersusBot(1, skillForRating(rating));
+      // Seeded rather than Math.random: the bot's wander and hesitation are noisy enough that an
+      // unseeded run makes this comparison a coin toss on a bad day.
+      const rng = new Rng(seed);
+      const bot = new VersusBot(1, skillForRating(rating), () => rng.int(1_000_000) / 1_000_000);
       const limit = 30 * 90;
       for (let i = 0; i < limit && s.status === 'playing'; i++) step(s, [{ dir: -1, fire: false }, bot.think(s)]);
       return s.players[1].kills >= VERSUS_LIVES ? s.tick : limit;

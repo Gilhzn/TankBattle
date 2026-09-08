@@ -31,6 +31,38 @@ export type GameMode = 'coop' | 'versus';
  * 2v2, where teammates cannot shoot each other and win or lose together.
  */
 export type VersusFormat = 'ffa' | 'teams';
+
+/**
+ * What a player can search for. There is no room to create and no code to pass around: a player
+ * picks one of these, and the matchmaker puts the seats together.
+ */
+export type MatchQueue = '1v1' | '2v2' | 'ffa' | 'coop';
+
+export interface QueueDef {
+  mode: GameMode;
+  versusFormat: VersusFormat;
+  /** Seats in a full match of this kind. */
+  size: number;
+  /**
+   * The fewest players the match may start with once the search has run out of patience. Above this
+   * the game starts with whoever turned up; below it the remaining seats are filled by the game.
+   */
+  min: number;
+}
+
+/**
+ * The queues, in the order they are offered. 2v2 is the one kind that has to reach its full size:
+ * teams are `slot % 2`, so three players would be a 2-vs-1.
+ */
+export const MATCH_QUEUES: Record<MatchQueue, QueueDef> = {
+  '1v1': { mode: 'versus', versusFormat: 'ffa', size: 2, min: 2 },
+  '2v2': { mode: 'versus', versusFormat: 'teams', size: 4, min: 4 },
+  ffa: { mode: 'versus', versusFormat: 'ffa', size: 4, min: 2 },
+  coop: { mode: 'coop', versusFormat: 'ffa', size: 4, min: 1 },
+};
+
+export const MATCH_QUEUE_KINDS: MatchQueue[] = ['1v1', '2v2', 'ffa', 'coop'];
+
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type GameStatus = 'playing' | 'stageClear' | 'gameOver';
 

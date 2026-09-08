@@ -51,12 +51,13 @@ Static: `/` serves `packages/client/dist` (SPA fallback to index.html). WebSocke
 ## WebSocket
 Messages are JSON, validated by `clientMessageSchema` / typed by `ServerMessage` in `@tank/shared`.
 1. connect → send `hello {token, version: PROTOCOL_VERSION}` → `welcome`.
-2. `createRoom | joinRoom | quickPlay` → `roomState` (includes `resumeToken`, `code`). `quickPlay` may also send `matchFound`.
-3. lobby: `setReady`, `setLoadout`, `chat`; host sends `startGame` → `roomState{status:'countdown', countdownEndsAt}` → after 3 s `gameStart {seed, stage, snapshot (full Snapshot), yourSlot}`.
-4. playing: client sends `input {seq, dir, fire}` on change and at least every 10 ticks; server sends `snapshot {snapshot}` at 15 Hz (`snapshot.full` true every 60 ticks / on join). `useItem {sku, nonce}` → `itemResult`.
-5. `stageClear` per stage; `gameOver {reason, results}` then `walletUpdate`, then `roomState{status:'lobby'}`.
-6. Disconnect: server keeps the seat 30 s; client reconnects, sends `hello` then `resume {roomId, resumeToken}` → `roomState` + full `snapshot`.
-7. `ping {t}` → `pong {t, serverTick, serverTime}` every 5 s for RTT.
+2. public games: `matchQueue {queue}` (`1v1 | 2v2 | ffa | coop`, see `MATCH_QUEUES`) → `queued {found, needed, startsInMs}` while searching → `matchFound` + `roomState` when seated. `matchCancel` leaves the queue. Nobody hosts and no code is exchanged; the server groups by rating, and after `MATCHMAKING_TIMEOUT_MS` starts with whoever is present, filling only up to the queue's `min`.
+3. playing with a friend: `inviteFriend {friendId}` opens a private room and pushes `gameInvite {fromName, code}` to that friend's live session; they answer with `joinRoom {code}`. `createRoom` / `joinRoom` exist only for this path.
+4. lobby (invite rooms only — matched rooms start themselves): `setReady`, `setLoadout`, `chat`; host sends `startGame` → `roomState{status:'countdown', countdownEndsAt}` → after 3 s `gameStart {seed, stage, snapshot (full Snapshot), yourSlot}`.
+5. playing: client sends `input {seq, dir, fire}` on change and at least every 10 ticks; server sends `snapshot {snapshot}` at 15 Hz (`snapshot.full` true every 60 ticks / on join). `useItem {sku, nonce}` → `itemResult`.
+6. `stageClear` per stage; `gameOver {reason, results}` then `walletUpdate`, then `roomState{status:'lobby'}`.
+7. Disconnect: server keeps the seat 30 s; client reconnects, sends `hello` then `resume {roomId, resumeToken}` → `roomState` + full `snapshot`.
+8. `ping {t}` → `pong {t, serverTick, serverTime}` every 5 s for RTT.
 
 Loadout semantics: boost SKUs with `atStart` are consumed from inventory at game start and applied as commands on tick 1 (`life`, `shield` (300 ticks), `star`). On-demand boosts (`grenade`, `clock`, `revive`) are consumed when `useItem` succeeds (inventory ≥ 1, `maxPerMatch` not exceeded, room playing). Boosts are ignored in versus mode.
 

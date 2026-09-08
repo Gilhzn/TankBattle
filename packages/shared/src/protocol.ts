@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { VersusFormat } from './types.js';
+import type { MatchQueue, VersusFormat } from './types.js';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -7,6 +7,7 @@ const dirSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3
 const modeSchema = z.enum(['coop', 'versus']);
 export const difficultySchema = z.enum(['easy', 'normal', 'hard']);
 export const versusFormatSchema = z.enum(['ffa', 'teams']);
+export const matchQueueSchema = z.enum(['1v1', '2v2', 'ffa', 'coop']);
 const codeSchema = z.string().regex(/^[A-Z2-9]{5}$/);
 export const nicknameSchema = z.string().trim().min(2).max(16).regex(/^[\p{L}\p{N} _.-]+$/u);
 export const skuSchema = z.string().regex(/^[a-z0-9_]{2,40}$/);
@@ -22,15 +23,17 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     versusFormat: versusFormatSchema.default('ffa'),
   }),
   z.object({ type: z.literal('joinRoom'), code: codeSchema, loadout: z.array(skuSchema).max(6).default([]) }),
-  z.object({ type: z.literal('quickPlay'), mode: modeSchema, loadout: z.array(skuSchema).max(6).default([]), versusFormat: versusFormatSchema.default('ffa') }),
   z.object({ type: z.literal('leaveRoom') }),
+  /** Search for a match. The only way into a public game — there is nothing to host and nothing to join. */
   z.object({
-    type: z.literal('rankedQueue'),
-    versusFormat: versusFormatSchema.default('ffa'),
+    type: z.literal('matchQueue'),
+    queue: matchQueueSchema,
     loadout: z.array(skuSchema).max(6).default([]),
     lang: z.enum(['en', 'he']).default('en'),
   }),
-  z.object({ type: z.literal('rankedCancel') }),
+  z.object({ type: z.literal('matchCancel') }),
+  /** Asks the server to open a private room and tell a friend about it. */
+  z.object({ type: z.literal('inviteFriend'), friendId: z.string().min(1).max(64) }),
   z.object({ type: z.literal('setReady'), ready: z.boolean() }),
   z.object({ type: z.literal('setLoadout'), loadout: z.array(skuSchema).max(6) }),
   z.object({ type: z.literal('startGame') }),
@@ -89,8 +92,13 @@ export type ServerMessage =
   | { type: 'welcome'; playerId: string; name: string; serverTime: number; tickRate: number; snapshotRate: number }
   | RoomStateMessage
   | { type: 'matchFound'; roomId: string }
-  /** Position in the ranked queue, sent while a player waits. */
-  | { type: 'queued'; since: number; searching: boolean }
+  /**
+   * How the search is going, sent whenever the queue's population changes: how many of the seats
+   * are filled, and how long until the match starts with whoever is present.
+   */
+  | { type: 'queued'; queue: MatchQueue; searching: boolean; since: number; found: number; needed: number; startsInMs: number }
+  /** A friend has opened a private room and is waiting there. */
+  | { type: 'gameInvite'; fromId: string; fromName: string; code: string }
   | { type: 'gameStart'; seed: number; stage: number; snapshot: unknown; yourSlot: number }
   | { type: 'snapshot'; snapshot: unknown }
   | { type: 'stageClear'; stage: number; scores: Array<{ playerId: string; score: number }>; coinsEarned: number }

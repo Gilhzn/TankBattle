@@ -1,11 +1,11 @@
-import { CATALOG_BY_SKU, type GameMode, type RoomStateMessage, type ServerMessage, type VersusFormat } from '@tank/shared';
+import { MATCH_QUEUES, MATCH_QUEUE_KINDS, CATALOG_BY_SKU, type MatchQueue, type RoomStateMessage, type ServerMessage } from '@tank/shared';
 import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { settings } from '../../app/settings.js';
 import { app, toast } from '../../app/store.js';
 import { getLang, t } from '../../i18n/index.js';
 import { ws, type WsState } from '../../net/wsClient.js';
-import { button, displayName, itemIcon, offlineNotice, panel, screenShell, spinner, tankPreview, toggle } from '../components.js';
+import { button, displayName, itemIcon, offlineNotice, panel, screenShell, spinner, tankPreview } from '../components.js';
 
 const MAX_LOADOUT = 3;
 
@@ -14,32 +14,25 @@ function ownedBoosts(): string[] {
   return Object.keys(inv).filter((sku) => inv[sku].qty > 0 && CATALOG_BY_SKU[sku]?.kind === 'boost');
 }
 
-/** Multiplayer lobby: connect → create/join/quick play → room view (players, loadout, chat, start). */
+/** How the search is going, as the server last described it. */
+interface Search {
+  queue: MatchQueue;
+  found: number;
+  needed: number;
+  /** When the match starts with whoever is present, as a local timestamp. */
+  deadline: number;
+}
+
+/** Multiplayer: pick a queue, get put into a match. Rooms exist only for friend invites. */
 export function lobbyScreen(root: HTMLElement): () => void {
   const shell = screenShell(t('lobby.title'), { back: '/', testid: 'lobby' });
   root.appendChild(shell.el);
   const body = shell.body;
-  let mode: GameMode = 'coop';
-  let versusFormat: VersusFormat = 'ffa';
-  let queued = false;
-
-  const rankedBtn = button(t('ranked.queue'), {
-    kind: 'primary',
-    big: true,
-    testid: 'lobby-ranked',
-    onClick: () => {
-      if (queued) {
-        ws.rankedCancel();
-        return;
-      }
-      ws.rankedQueue(versusFormat, getLang());
-      setStatus(t('ranked.searching'));
-    },
-  });
-  let isPrivate = false;
+  let search: Search | null = null;
   let loadout = settings.get().mpLoadout.filter((s) => ownedBoosts().includes(s)).slice(0, MAX_LOADOUT);
   const chatLog: Array<{ name: string; text: string }> = [];
   let countdownTimer = 0;
+  let searchTimer = 0;
   let disposed = false;
 
   const setStatus = (text: string, kind = ''): void => {
@@ -50,86 +43,83 @@ export function lobbyScreen(root: HTMLElement): () => void {
     }
   };
 
+  /** The queue picker: one tap per way to play, and nothing to configure. */
   const renderHome = (): void => {
+    window.clearInterval(searchTimer);
     clear(body);
-    const code = h('input', {
-      class: 'code-input',
-      type: 'text',
-      inputMode: 'latin',
-      autocomplete: 'off',
-      autocapitalize: 'characters',
-      maxLength: 5,
-      placeholder: t('lobby.codePlaceholder'),
-      dataset: { testid: 'lobby-join-code' },
-      attrs: { 'aria-label': t('lobby.joinTitle'), spellcheck: 'false' },
-      oninput: () => {
-        code.value = code.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
-        joinBtn.disabled = code.value.length !== 5;
-      },
-      onkeydown: (e: KeyboardEvent) => {
-        if (e.key === 'Enter' && code.value.length === 5) joinBtn.click();
-      },
-    });
-    const joinBtn = button(t('lobby.join'), {
-      kind: 'primary',
-      big: true,
-      testid: 'lobby-join',
-      disabled: true,
-      onClick: () => {
-        setStatus(t('common.loading'));
-        ws.joinRoom(code.value, mode === 'versus' ? [] : loadout);
-      },
-    });
-    const modeTabs = h(
-      'div',
-      { class: 'seg', attrs: { role: 'radiogroup' } },
-      ...(['coop', 'versus'] as GameMode[]).map((m) =>
-        h('button', { class: `seg-btn ${m === mode ? 'active' : ''}`, type: 'button', dataset: { testid: `lobby-mode-${m}` }, attrs: { role: 'radio', 'aria-checked': m === mode ? 'true' : 'false' }, onclick: () => { mode = m; renderHome(); } }, t(`lobby.${m}`)),
-      ),
-    );
-    // 2v2 is only a choice once you are actually playing against people.
-    const formatTabs = h(
-      'div',
-      { class: 'seg', attrs: { role: 'radiogroup' } },
-      ...(['ffa', 'teams'] as VersusFormat[]).map((f) =>
-        h(
-          'button',
-          {
-            class: `seg-btn ${f === versusFormat ? 'active' : ''}`,
-            type: 'button',
-            dataset: { testid: `lobby-format-${f}` },
-            attrs: { role: 'radio', 'aria-checked': f === versusFormat ? 'true' : 'false' },
-            onclick: () => {
-              versusFormat = f;
-              renderHome();
+    body.append(
+      h('div', { class: 'lobby-status', dataset: { testid: 'lobby-status' } }),
+      h('p', { class: 'muted queue-intro' }, t('lobby.findHint')),
+      h(
+        'div',
+        { class: 'queue-grid', dataset: { testid: 'lobby-queues' } },
+        ...MATCH_QUEUE_KINDS.map((kind) =>
+          h(
+            'button',
+            {
+              class: `queue-card ${kind === 'coop' ? 'coop' : ''}`,
+              type: 'button',
+              dataset: { testid: `queue-${kind}` },
+              onclick: () => startSearch(kind),
             },
-          },
-          t(`lobby.format.${f}`),
+            h('span', { class: 'queue-name' }, t(`queue.${kind}`)),
+            h('span', { class: 'queue-seats' }, seatDots(MATCH_QUEUES[kind].size)),
+            h('span', { class: 'queue-hint muted' }, t(`queue.${kind}Hint`)),
+          ),
         ),
       ),
     );
+  };
+
+  /** Four pips showing how many seats the queue plays with, filled to its size. */
+  const seatDots = (size: number, found = size): HTMLElement =>
+    h(
+      'span',
+      { class: 'seat-dots' },
+      ...Array.from({ length: size }, (_, i) => h('i', { class: `seat-dot ${i < found ? 'on' : ''}` })),
+    );
+
+  const startSearch = (kind: MatchQueue): void => {
+    // Shown before the server answers: the tap should feel instant even on a slow link.
+    search = { queue: kind, found: 1, needed: MATCH_QUEUES[kind].size, deadline: 0 };
+    ws.matchQueue(kind, getLang(), MATCH_QUEUES[kind].mode === 'versus' ? [] : loadout);
+    renderSearching();
+  };
+
+  const cancelSearch = (): void => {
+    ws.matchCancel();
+    search = null;
+    renderHome();
+  };
+
+  /** The waiting screen: how full the match is, and how long until it starts anyway. */
+  const renderSearching = (): void => {
+    if (!search) {
+      renderHome();
+      return;
+    }
+    const { queue, found, needed } = search;
+    clear(body);
+    const fill = h('i', { class: 'queue-fill-bar', attrs: { style: `width:${Math.round((found / needed) * 100)}%` } });
+    const countdown = h('p', { class: 'muted', dataset: { testid: 'queue-countdown' } });
+    const tick = (): void => {
+      if (!search) return;
+      const left = Math.ceil((search.deadline - Date.now()) / 1000);
+      countdown.textContent = !search.deadline ? '' : left > 0 ? t('queue.startsIn', { n: left }) : t('queue.starting');
+    };
+    window.clearInterval(searchTimer);
+    searchTimer = window.setInterval(tick, 250);
+    tick();
+
     body.append(
       h('div', { class: 'lobby-status', dataset: { testid: 'lobby-status' } }),
       panel(
-        h('h2', null, t('lobby.create')),
-        h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('lobby.mode')), modeTabs),
-        ...(mode === 'versus'
-          ? [h('div', { class: 'field', dataset: { testid: 'lobby-format' } }, h('span', { class: 'field-label' }, t('lobby.formatLabel')), formatTabs, h('small', { class: 'muted' }, t(`lobby.format.${versusFormat}Hint`)))]
-          : []),
-        h('label', { class: 'field row-field' }, h('span', null, t('lobby.private'), h('small', { class: 'muted' }, t('lobby.privateHint'))), toggle(isPrivate, (v) => (isPrivate = v), 'lobby-private')),
-        button(t('lobby.create'), { kind: 'primary', big: true, testid: 'lobby-create', onClick: () => { setStatus(t('common.loading')); ws.createRoom(mode, isPrivate, mode === 'versus' ? [] : loadout, settings.get().difficulty, versusFormat); } }),
-      ),
-      panel(h('h2', null, t('lobby.joinTitle')), h('div', { class: 'join-row' }, code, joinBtn)),
-      panel(
-        h('h2', null, t('lobby.quickPlay')),
-        h('p', { class: 'muted' }, t('lobby.quickPlayHint')),
-        button(`${t('lobby.quickPlay')} · ${t(`lobby.${mode}`)}`, { kind: 'accent', big: true, testid: 'lobby-quick', onClick: () => { setStatus(t('common.loading')); ws.quickPlay(mode, mode === 'versus' ? [] : loadout, versusFormat); } }),
-      ),
-      // Ranked is its own path: it pairs by rating rather than by whoever is free.
-      panel(
-        h('h2', null, t('ranked.title')),
-        h('p', { class: 'muted' }, t('ranked.hint')),
-        rankedBtn,
+        h('h2', null, t(`queue.${queue}`)),
+        h('div', { class: 'searching' }, spinner(), h('p', null, t('queue.searching'))),
+        h('div', { class: 'queue-progress' }, seatDots(needed, found), h('span', { dataset: { testid: 'queue-found' } }, t('queue.found', { n: found, m: needed }))),
+        h('div', { class: 'queue-fill' }, fill),
+        countdown,
+        button(t('queue.cancel'), { kind: 'ghost', big: true, testid: 'queue-cancel', onClick: cancelSearch }),
       ),
     );
   };
@@ -224,7 +214,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
     body.append(
       panel(
         h('div', { class: 'room-code-row' },
-          h('div', null, h('div', { class: 'muted' }, `${t('lobby.roomCode')} · ${t(`lobby.${room.mode}`)}${room.isPrivate ? ' · ' + t('lobby.private') : ''}`), h('div', { class: 'room-code', dataset: { testid: 'lobby-code' } }, room.code)),
+          h('div', null, h('div', { class: 'muted' }, t('lobby.inviteRoom')), h('div', { class: 'room-code', dataset: { testid: 'lobby-code' } }, room.code)),
           h('div', { class: 'row' }, copyBtn, shareBtn),
         ),
         countdown,
@@ -256,16 +246,21 @@ export function lobbyScreen(root: HTMLElement): () => void {
     switch (msg.type) {
       case 'roomState':
         if (ws.room) renderRoom(ws.room);
-        else renderHome();
+        else if (!search) renderHome();
         break;
       case 'queued':
-        queued = msg.searching;
-        rankedBtn.textContent = queued ? t('ranked.cancel') : t('ranked.queue');
-        if (!queued) setStatus('');
+        if (!msg.searching) {
+          search = null;
+          renderHome();
+          break;
+        }
+        // The countdown is kept as a local deadline, so no clock skew has to be reasoned about.
+        search = { queue: msg.queue, found: msg.found, needed: msg.needed, deadline: Date.now() + msg.startsInMs };
+        renderSearching();
         break;
       case 'matchFound':
-        queued = false;
-        rankedBtn.textContent = t('ranked.queue');
+        search = null;
+        window.clearInterval(searchTimer);
         toast(t('lobby.matchFound'), 'success');
         break;
       case 'gameStart':
@@ -281,9 +276,11 @@ export function lobbyScreen(root: HTMLElement): () => void {
         break;
       case 'kicked':
         toast(msg.reason, 'error');
+        search = null;
         renderHome();
         break;
       case 'left':
+        search = null;
         renderHome();
         break;
       case 'walletUpdate':
@@ -334,6 +331,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
   return () => {
     disposed = true;
     window.clearTimeout(countdownTimer);
+    window.clearInterval(searchTimer);
     unsubServer();
     unsubState();
     shell.el.remove();

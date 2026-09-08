@@ -1076,6 +1076,101 @@ html[dir='rtl'] .btn.back .chev {
   color: var(--cyan);
 }
 
+/* ---------- matchmaking ---------- */
+.queue-intro {
+  margin-block-end: var(--space-3);
+}
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+.queue-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: 120px;
+  padding: var(--space-4);
+  border: 1px solid var(--keyline);
+  border-radius: var(--radius-m);
+  background: linear-gradient(150deg, rgba(94, 225, 255, 0.12), rgba(255, 255, 255, 0.03));
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.queue-card.coop {
+  background: linear-gradient(150deg, rgba(126, 231, 135, 0.12), rgba(255, 255, 255, 0.03));
+}
+.queue-card:active {
+  transform: scale(0.98);
+}
+.queue-card:hover {
+  border-color: var(--cyan);
+}
+.queue-name {
+  font-size: var(--fs-l);
+  font-weight: 900;
+}
+.queue-hint {
+  font-size: var(--fs-s);
+}
+.seat-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.seat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--keyline);
+  background: transparent;
+}
+.seat-dot.on {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(94, 225, 255, 0.6);
+}
+.queue-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-weight: 700;
+  margin-block: var(--space-3) var(--space-2);
+}
+.queue-fill {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.queue-fill-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+  transition: width 0.3s ease;
+}
+.searching {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding-block: var(--space-4);
+}
+.searching p {
+  margin: 0;
+  font-weight: 700;
+}
+.queue-progress + .queue-fill {
+  margin-block-end: var(--space-2);
+}
+.friend-invite {
+  flex: 0 0 auto;
+}
+
 /* ---------- friends ---------- */
 .friend-row {
   display: flex;

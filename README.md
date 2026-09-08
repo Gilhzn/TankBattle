@@ -53,13 +53,21 @@ account exists.
 
 ## Multiplayer
 
-- **Ranked 1v1** pairs by rating (Elo, starting at 1000, K=20 — an even match moves 10 points, a
-  slightly weaker opponent 9, a slightly stronger one 11). The search window widens as you wait; if
-  nobody suitable appears within `MATCHMAKING_TIMEOUT_MS` the game fills the seat itself with an
-  opponent rated near you and playing at that level. The arena changes every 100 rating points.
-- **Free-for-all** seats up to four players, everyone for themselves.
-- **2v2** pairs alternating seats across the arena. Teammates' shells pass through each other and a
-  teammate's death scores nothing.
+- **Nobody hosts.** There is no room to create and no code to type: you pick **1v1**, **2v2**,
+  **deathmatch** or **co-op**, and the server puts the match together. While you wait it says how
+  many of the seats are filled and how long is left.
+- **Pairing is by rating** (Elo, starting at 1000, K=20 — an even match moves 10 points, a slightly
+  weaker opponent 9, a slightly stronger one 11), inside a window that widens as you wait. The arena
+  changes every 100 rating points.
+- **The wait is bounded.** After `MATCHMAKING_TIMEOUT_MS` (20 s) the match starts with whoever is
+  there. Only the seats still missing below the mode's minimum are filled by the game, with an
+  opponent rated near you and playing at that level — so a lone player still gets a match, and two
+  people waiting for a deathmatch play each other rather than waiting on a third.
+- **Deathmatch** seats up to four players, everyone for themselves.
+- **2v2** pairs alternating seats across the arena, with the four ratings split as evenly as they
+  divide. Teammates' shells pass through each other and a teammate's death scores nothing.
+- **To play with someone specific**, use *Invite to game* on their row in your friends list. They
+  get the invitation wherever they are in the app; the private room comes with it.
 - Everyone gets **three eliminations**; the match ends when one side is left standing, with the
   clock as a stalemate fallback.
 - Versus drops only pickups that cannot decide a duel — no grenade, no weapon upgrade, no freeze —

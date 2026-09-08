@@ -1,6 +1,6 @@
 import {
   PROTOCOL_VERSION, TICK_MS,
-  type ClientMessage, type Difficulty, type GameMode, type Input, type RoomStateMessage, type ServerMessage, type Snapshot, type TickEvent, type VersusFormat,
+  type ClientMessage, type Difficulty, type GameMode, type Input, type MatchQueue, type RoomStateMessage, type ServerMessage, type Snapshot, type TickEvent, type VersusFormat,
 } from '@tank/shared';
 import { Emitter, type GameTransport, type MetaEvent } from './transport.js';
 import { getToken } from '../app/api.js';
@@ -280,15 +280,19 @@ export class WsClient implements GameTransport {
   joinRoom(code: string, loadout: string[]): void {
     this.send({ type: 'joinRoom', code: code.toUpperCase(), loadout });
   }
-  quickPlay(mode: GameMode, loadout: string[], versusFormat: VersusFormat = 'ffa'): void {
-    this.send({ type: 'quickPlay', mode, loadout, versusFormat });
+  /**
+   * Searches for a match. The server groups players by rating and starts with whoever is there once
+   * the search runs out of patience — there is nothing to host and no code to pass around.
+   */
+  matchQueue(queue: MatchQueue, lang: 'en' | 'he' = 'en', loadout: string[] = []): void {
+    this.send({ type: 'matchQueue', queue, lang, loadout });
   }
-  /** Joins the ranked queue. The server pairs by rating, or fills the match itself if nobody comes. */
-  rankedQueue(versusFormat: VersusFormat = 'ffa', lang: 'en' | 'he' = 'en', loadout: string[] = []): void {
-    this.send({ type: 'rankedQueue', versusFormat, lang, loadout });
+  matchCancel(): void {
+    this.send({ type: 'matchCancel' });
   }
-  rankedCancel(): void {
-    this.send({ type: 'rankedCancel' });
+  /** Asks the server to open a private room and tell a friend about it. */
+  inviteFriend(friendId: string): void {
+    this.send({ type: 'inviteFriend', friendId });
   }
   leaveRoom(): void {
     this.send({ type: 'leaveRoom' });

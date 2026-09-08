@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { arenaIndexForRating, type ServerMessage } from '@tank/shared';
+import { arenaIndexForRating, teamOf, type ServerMessage } from '@tank/shared';
 import { Matchmaker, type Ticket } from '../src/rooms/matchmaker.js';
 import { RoomManager } from '../src/rooms/roomManager.js';
 import { ScriptedChatResponder } from '../src/game/botChat.js';
@@ -17,7 +17,7 @@ class Sink {
   }
 }
 
-describe('ranked matchmaking', () => {
+describe('matchmaking', () => {
   let now = 1_000_000;
   const clock = () => now;
   const log = createLogger('error', 'test');
@@ -31,7 +31,7 @@ describe('ranked matchmaking', () => {
     rating,
     country: 'IL',
     lang: 'en',
-    format: 'ffa',
+    queue: '1v1',
     loadout: [],
     queuedAt: now,
     ...over,
@@ -94,13 +94,93 @@ describe('ranked matchmaking', () => {
     expect(names).toEqual(['near', 'seeker']);
   });
 
-  it('never pairs across formats, since the format decides who may shoot whom', () => {
-    mm.enqueue(ticket('a', 1000, { format: 'ffa' }));
-    mm.enqueue(ticket('b', 1000, { format: 'teams' }));
+  it('never groups across queues: two people searching for different games are not each other\'s match', () => {
+    mm.enqueue(ticket('a', 1000, { queue: '1v1' }));
+    mm.enqueue(ticket('b', 1000, { queue: 'ffa' }));
     expect(matched).toHaveLength(0);
   });
 
-  it('sets the arena from the pair\'s rating band', () => {
+  it('fills a 4-player deathmatch from four searchers', () => {
+    for (const [id, r] of [['a', 1000], ['b', 1010], ['c', 1020], ['d', 1030]] as const) mm.enqueue(ticket(id, r, { queue: 'ffa' }));
+    expect(matched).toHaveLength(4);
+    const room = matched[0].room;
+    expect(matched.every((m) => m.room === room)).toBe(true);
+    expect(room.players).toHaveLength(4);
+    expect(room.versusFormat).toBe('ffa');
+    expect(mm.size).toBe(0);
+  });
+
+  it('does not start a deathmatch with three when a fourth may still turn up', () => {
+    for (const [id, r] of [['a', 1000], ['b', 1010], ['c', 1020]] as const) mm.enqueue(ticket(id, r, { queue: 'ffa' }));
+    expect(matched).toHaveLength(0);
+    expect(mm.waiting('ffa')).toBe(3);
+  });
+
+  it('balances the two sides of a 2v2 as evenly as four ratings allow', () => {
+    for (const [id, r] of [['a', 1000], ['b', 1020], ['c', 1040], ['d', 1060]] as const) mm.enqueue(ticket(id, r, { queue: '2v2' }));
+    expect(matched).toHaveLength(4);
+    const room = matched[0].room;
+    expect(room.versusFormat).toBe('teams');
+    const ratingOf: Record<string, number> = { a: 1000, b: 1020, c: 1040, d: 1060 };
+    const sides = [0, 1].map((team) =>
+      room.players.filter((p) => teamOf(p.slot, 'versus', 'teams') === team).reduce((sum, p) => sum + ratingOf[p.id], 0),
+    );
+    // {1000,1060} against {1020,1040}: the closest split there is.
+    expect(Math.abs(sides[0] - sides[1])).toBe(0);
+  });
+
+  it('starts a deathmatch with whoever is there once the wait runs out, with no filled seats', () => {
+    mm.enqueue(ticket('a', 1000, { queue: 'ffa' }));
+    mm.enqueue(ticket('b', 1010, { queue: 'ffa' }));
+    expect(matched).toHaveLength(0);
+    now += 20_000;
+    (mm as unknown as { pump(): void }).pump();
+    expect(matched).toHaveLength(2);
+    expect(matched[0].room.players).toHaveLength(2);
+    expect(matched[0].room.players.some((p) => p.bot)).toBe(false);
+  });
+
+  it('fills a 2v2 to four, because three players would be a two-against-one', () => {
+    mm.enqueue(ticket('lonely', 1000, { queue: '2v2' }));
+    now += 20_000;
+    (mm as unknown as { pump(): void }).pump();
+    const room = matched[0].room;
+    expect(room.players).toHaveLength(4);
+    expect(room.players.filter((p) => p.bot)).toHaveLength(3);
+  });
+
+  it('starts co-op alone rather than holding someone in a queue for a campaign they can play solo', () => {
+    mm.enqueue(ticket('solo', 1000, { queue: 'coop' }));
+    now += 20_000;
+    (mm as unknown as { pump(): void }).pump();
+    expect(matched).toHaveLength(1);
+    expect(matched[0].room.mode).toBe('coop');
+    expect(matched[0].room.players).toHaveLength(1);
+  });
+
+  it('tells everyone searching how full their match is', () => {
+    const a = ticket('a', 1000, { queue: 'ffa' });
+    mm.enqueue(a);
+    const sink = a.link as Sink;
+    const progress = (): Array<{ found: number; needed: number }> =>
+      sink.sent.filter((m) => m.type === 'queued').map((m) => ({ found: (m as { found: number }).found, needed: (m as { needed: number }).needed }));
+    expect(progress().at(-1)).toEqual({ found: 1, needed: 4 });
+    mm.enqueue(ticket('b', 1010, { queue: 'ffa' }));
+    expect(progress().at(-1)).toEqual({ found: 2, needed: 4 });
+    mm.leave('b');
+    expect(progress().at(-1)).toEqual({ found: 1, needed: 4 });
+  });
+
+  it('counts down to the start in the progress it sends', () => {
+    const a = ticket('a', 1000, { queue: 'ffa' });
+    mm.enqueue(a);
+    now += 12_000;
+    mm.enqueue(ticket('b', 1010, { queue: 'ffa' }));
+    const last = (a.link as Sink).sent.filter((m) => m.type === 'queued').at(-1) as { startsInMs: number };
+    expect(last.startsInMs).toBe(8_000);
+  });
+
+  it('sets the arena from the group\'s rating band', () => {
     mm.enqueue(ticket('a', 1000));
     mm.enqueue(ticket('b', 1040));
     expect(matched[0].room.stage).toBe(arenaIndexForRating(1020));
@@ -124,7 +204,8 @@ describe('ranked matchmaking', () => {
     (mm as unknown as { pump(): void }).pump();
     const bot = matched[0].room.players.find((p) => p.bot)!;
     expect(bot).toBeTruthy();
-    expect(bot.name).not.toMatch(/bot|ai|cpu|computer/i);
+    // Whole words: a name like "Shai" contains "ai" without announcing anything.
+    expect(bot.name).not.toMatch(/\b(bot|ai|cpu|npc|computer)\b/i);
     expect(Math.abs(bot.bot!.rating - 1200)).toBeLessThanOrEqual(40);
   });
 
