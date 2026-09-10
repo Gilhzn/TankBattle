@@ -1,7 +1,9 @@
+import { BRAND } from '@tank/shared';
+
 export const en = {
   // generic
-  'app.title': 'Tank 1990 Online',
-  'app.tagline': 'Battle City, rebuilt for 2026',
+  'app.title': BRAND.name,
+  'app.tagline': 'Neon armour. One grid. Four players.',
   'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -77,7 +79,7 @@ export const en = {
   'lobby.countdown': 'Starting in {n}…',
   'lobby.team': 'Team {n}',
   'lobby.offline': 'Multiplayer needs a connection to the server.',
-  'lobby.shareText': 'Join my Tank 1990 room: {code}',
+  'lobby.shareText': 'Join my {game} room: {code}',
   'lobby.matchFound': 'Match found!',
   'lobby.findMatch': 'Find a match',
   'lobby.findHint': 'Pick how you want to play — we put the match together for you.',
@@ -267,12 +269,12 @@ export const en = {
   'item.gems_550': 'Crate of Gems',
   'item.gems_1200': 'Vault of Gems',
   'item.starter_pack': 'Starter Pack',
-  'item.boost_life': 'Extra Life',
-  'item.boost_shield': 'Start Shield',
-  'item.boost_star': 'Star Start',
-  'item.boost_grenade': 'Grenade',
-  'item.boost_clock': 'Time Freeze',
-  'item.revive_token': 'Revive Token',
+  'item.boost_life': 'Reserve Hull',
+  'item.boost_shield': 'Launch Overshield',
+  'item.boost_star': 'Hardpoint Start',
+  'item.boost_grenade': 'Pulse Charge',
+  'item.boost_clock': 'Stasis Field',
+  'item.revive_token': 'Rebuild Token',
   'item.skin_neon_viper': 'Neon Viper',
   'item.skin_gold_ingot': 'Gold Ingot',
   'item.skin_void': 'Void Walker',
@@ -282,7 +284,7 @@ export const en = {
   'item.desc.gems_100': '100 gems',
   'item.desc.gems_550': '500 + 50 bonus gems',
   'item.desc.gems_1200': '1000 + 200 bonus gems',
-  'item.desc.starter_pack': '300 gems, Ember skin and 3 shields',
+  'item.desc.starter_pack': '300 gems, Ember skin and 3 overshields',
   'item.desc.boost_life': '+1 life at match start',
   'item.desc.boost_shield': '10 s of invulnerability at match start',
   'item.desc.boost_star': 'Begin with a tier-1 cannon',
@@ -297,14 +299,15 @@ export const en = {
   'item.desc.battlepass_premium': 'Unlock the premium reward track this season',
 
   // power-ups
-  'pu.star': 'Star',
-  'pu.tank': 'Tank',
-  'pu.grenade': 'Grenade',
-  'pu.clock': 'Clock',
-  'pu.shovel': 'Shovel',
-  'pu.helmet': 'Helmet',
-  'pu.ship': 'Ship',
-  'pu.gun': 'Gun',
+  // Pickups. The keys are the simulation's ids, which never change; these are what players read.
+  'pu.star': 'Hardpoint',
+  'pu.tank': 'Reserve',
+  'pu.grenade': 'Pulse',
+  'pu.clock': 'Stasis',
+  'pu.shovel': 'Bulwark',
+  'pu.helmet': 'Overshield',
+  'pu.ship': 'Ferry',
+  'pu.gun': 'Railgun',
 
   // errors
   'err.network': 'Network error',

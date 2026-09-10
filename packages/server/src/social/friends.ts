@@ -1,3 +1,4 @@
+import { BRAND } from '@tank/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Db, FriendRequestRow, UserRow } from '../db/repo.js';
 import { badRequest, conflict, notFound, tooMany } from '../util/errors.js';
@@ -193,7 +194,7 @@ export class FriendsService {
     // and point at a host that does not exist.
     const base = (this.deps.publicUrl || origin || '').replace(/\/+$/, '');
     const url = `${base}/#/invite/${code}`;
-    const text = `${nickname} wants to battle you in Tank 1990! ${url}`;
+    const text = `${nickname} wants to battle you in ${BRAND.name}! ${url}`;
     return {
       code,
       url,

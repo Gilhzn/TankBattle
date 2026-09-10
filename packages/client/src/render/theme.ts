@@ -8,16 +8,30 @@ export const COLORS = {
   lime: '#b6ff5e',
   amber: '#ffd166',
   white: '#ffffff',
-  brick: '#8a3a2f',
-  brickLight: '#c85a45',
-  brickDark: '#4a1c16',
-  mortar: '#1a0c0c',
-  steel: '#8f9bb0',
-  steelLight: '#e2e8f4',
-  steelDark: '#3d4557',
-  water: '#0b3a66',
-  waterLight: '#2f8fd6',
+  /**
+   * Destructible cover is a graphite composite panel lit from inside: a dark plate whose seams
+   * carry amber light. Warm still means "this breaks" and cool still means "this does not", so the
+   * read a player needs in a tenth of a second survives, but the material is a panel and not
+   * masonry.
+   */
+  panel: '#2b3040',
+  panelFace: '#394054',
+  panelLight: '#4a5265',
+  panelDark: '#151a26',
+  panelSeam: '#ff9d3c',
+  panelSeamHot: '#ffd9a0',
+  /** Structural bulkhead: one bevelled slab with a hazard stripe. Never breaks, never shot through. */
+  hull: '#8b97ac',
+  hullLight: '#dfe6f2',
+  hullDark: '#394152',
+  hullShadow: '#2c323f',
+  hazard: '#f2c14e',
+  /** Plasma channel: a dark trench with a live core running down it. */
+  water: '#0a1424',
+  waterLight: '#8f6bff',
   waterGlow: '#5ee1ff',
+  plasmaCore: '#b49bff',
+  plasmaEdge: '#2b2350',
   /**
    * Packed snow, not ice. A translucent pale blue read as *glass* — players saw a window, not a
    * surface, and had no reason to expect it to be slippery. These are opaque, matte and bright:
@@ -27,12 +41,15 @@ export const COLORS = {
   snowShade: '#c3d6e8',
   snowDeep: '#93aec7',
   snowTrack: '#7e9cba',
-  trees: '#1f9a4a',
-  treesLight: '#5ee97a',
-  treesDark: '#0c3f22',
-  base: '#ffd166',
-  baseLight: '#fff0b8',
-  baseDark: '#7a5a12',
+  /** Canopy: translucent crystal shards a tank can drive under and be hidden by. */
+  trees: '#1f9a86',
+  treesLight: '#68f2d2',
+  treesDark: '#062f2c',
+  treesShard: '#0e6b62',
+  /** The reactor core each side defends. */
+  base: '#5ee1ff',
+  baseLight: '#eafcff',
+  baseDark: '#0d3d55',
   bulletPlayer: '#fff7d6',
   bulletEnemy: '#ffb4e6',
   /** Hostile optic lens shared by every AI chassis. */

@@ -27,7 +27,7 @@ describe('i18n', () => {
     expect(t('common.back')).toBe('Back');
   });
   it('resolves item names with a fallback', () => {
-    expect(itemName('boost_grenade', 'x')).toBe('Grenade');
+    expect(itemName('boost_grenade', 'x')).toBe('Pulse Charge');
     expect(itemName('unknown_sku', 'Fallback')).toBe('Fallback');
   });
   it('has a Hebrew translation for every English key', () => {

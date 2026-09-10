@@ -1,4 +1,4 @@
-# Tank 1990 Online — API contract (server ⇄ client)
+# IRONGRID — API contract (server ⇄ client)
 
 All JSON. Errors: HTTP 4xx/5xx with body `{ "error": { "code": string, "message": string } }`.
 Auth: `Authorization: Bearer <token>` on everything except `/api/auth/guest`, `/api/health`, `/api/store/webhook/stripe`.

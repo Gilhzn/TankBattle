@@ -1,3 +1,4 @@
+import { BRAND } from '@tank/shared';
 import { Api } from '../../app/api.js';
 import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
@@ -69,7 +70,7 @@ export function menuScreen(root: HTMLElement): () => void {
     h('div', { class: 'menu-bg', attrs: { 'aria-hidden': 'true' } }, ...Array.from({ length: 14 }, (_, i) => h('i', { class: 'spark', style: { '--i': String(i) } as unknown as Partial<CSSStyleDeclaration> }))),
     h('div', { class: 'menu-top' }, profile, status),
     h('div', { class: 'menu-hero' },
-      h('h1', { class: 'logo' }, h('span', { class: 'logo-tank' }, 'TANK'), h('span', { class: 'logo-year' }, '1990'), h('span', { class: 'logo-online' }, 'ONLINE')),
+      h('h1', { class: 'logo' }, h('span', { class: 'logo-a' }, BRAND.logo[0]), h('span', { class: 'logo-b' }, BRAND.logo[1]), h('span', { class: 'logo-sub' }, 'ONLINE')),
       h('p', { class: 'tagline' }, t('app.tagline')),
     ),
     h('nav', { class: 'menu-nav' },

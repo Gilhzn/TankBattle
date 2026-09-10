@@ -1,8 +1,8 @@
-/* Tank 1990 Online — hand-written service worker.
+/* IRONGRID — hand-written service worker.
  * cache-first for the precached app shell, network-first with cache fallback for navigations,
  * network-only for /api and /ws. The cache name changes per build (asset-manifest.json carries the version). */
 const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
-let cacheName = 'tank1990-shell';
+let cacheName = 'irongrid-shell';
 
 async function readManifest() {
   try {
@@ -19,7 +19,7 @@ self.addEventListener('install', (event) => {
     (async () => {
       const manifest = await readManifest();
       const version = manifest?.version || 'dev';
-      cacheName = 'tank1990-' + version;
+      cacheName = 'irongrid-' + version;
       const cache = await caches.open(cacheName);
       const files = new Set([...SHELL, ...(manifest?.files || [])]);
       await Promise.all(
@@ -40,7 +40,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k.startsWith('tank1990-') && k !== cacheName).map((k) => caches.delete(k)));
+      // The old prefix goes too, so a device that already has the game installed does not keep a
+      // stale shell around for ever under its previous name.
+      await Promise.all(keys.filter((k) => (k.startsWith('irongrid-') || k.startsWith('tank1990-')) && k !== cacheName).map((k) => caches.delete(k)));
       await self.clients.claim();
       const clients = await self.clients.matchAll({ type: 'window' });
       for (const c of clients) c.postMessage({ type: 'sw-updated', version: cacheName });

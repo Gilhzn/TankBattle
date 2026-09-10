@@ -91,12 +91,13 @@ export class Effects {
     return this.reducedMotion() ? Math.ceil(n / 3) : n;
   }
 
+  /** A composite panel coming apart: dark shrapnel with the odd fleck of its seam still lit. */
   brick(x: number, y: number): void {
     const n = this.count(8);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 0.08 + Math.random() * 0.16;
-      this.spawn(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 0.1, 320 + Math.random() * 220, 6 + Math.random() * 8, i % 3 === 0 ? COLORS.brickLight : COLORS.brick, 0, 0.0006, 0.002);
+      this.spawn(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 0.1, 320 + Math.random() * 220, 6 + Math.random() * 8, i % 3 === 0 ? COLORS.panelSeam : COLORS.panelLight, 0, 0.0006, 0.002);
     }
   }
 

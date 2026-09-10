@@ -121,12 +121,13 @@ interface Chassis {
 }
 
 const CHASSIS: Record<TankShape, Chassis> = {
-  // Free / ally chassis — the familiar rounded Battle City hull.
+  // Free / ally chassis. Angular, with chamfered shoulders and a hexagonal turret ring: it has to
+  // hold its own next to the paid hulls without borrowing any of their tells.
   standard: {
-    trackW: 3.4, trackR: 1.2, trackSpans: [[1, 15]], treadStep: 1.6, treadH: 0.55, skirt: false,
-    hull: null, hullRect: [3.0, 2.2, 10.0, 11.6, 2],
-    turret: 'round', turretR: 3.1, turretY: 8.8,
-    barrelW: 1.4, barrelTip: 0.2, muzzle: 'none', extras: 'none', cupola: false, antenna: false,
+    trackW: 3.2, trackR: 0.9, trackSpans: [[1.2, 14.8]], treadStep: 1.5, treadH: 0.6, skirt: false,
+    hull: [[5.4, 1.6], [10.6, 1.6], [12.3, 4.4], [12.3, 11.8], [10.6, 14.4], [5.4, 14.4], [3.7, 11.8], [3.7, 4.4]],
+    turret: 'hex', turretR: 3.0, turretY: 9.0,
+    barrelW: 1.5, barrelTip: 0.2, muzzle: 'none', extras: 'none', cupola: false, antenna: false,
   },
   // 400 gems — very wide tracks, narrow blocky hull, stubby high-calibre gun.
   heavy: {
@@ -601,42 +602,113 @@ export function drawBulletSprite(ctx: Ctx2D, size: number, color: string, glow: 
 export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: number, tx: number, ty: number): void {
   switch (tile) {
     case Tile.BRICK: {
-      ctx.fillStyle = COLORS.mortar;
+      // Composite panel: one chamfered graphite plate per tile, with the amber seams that carry its
+      // charge running across the face. Warm light on a dark plate still reads "this one breaks".
+      const c = Math.max(1, s * 0.22); // corner chamfer
+      ctx.fillStyle = COLORS.panelDark;
       ctx.fillRect(x, y, s, s);
-      const bw = s / 2;
-      const bh = s / 2;
-      const gap = Math.max(0.6, s * 0.08);
-      for (let r = 0; r < 2; r++) {
-        const off = (r + ty) % 2 === 0 ? 0 : bw / 2;
-        for (let c = -1; c < 3; c++) {
-          const bx = x + c * bw + off;
-          const by = y + r * bh;
-          const cx0 = Math.max(bx + gap / 2, x);
-          const cx1 = Math.min(bx + bw - gap / 2, x + s);
-          if (cx1 <= cx0) continue;
-          const g = ctx.createLinearGradient(0, by, 0, by + bh);
-          g.addColorStop(0, COLORS.brickLight);
-          g.addColorStop(1, COLORS.brick);
-          ctx.fillStyle = g;
-          ctx.fillRect(cx0, by + gap / 2, cx1 - cx0, bh - gap);
+      ctx.beginPath();
+      ctx.moveTo(x + c, y);
+      ctx.lineTo(x + s - c, y);
+      ctx.lineTo(x + s, y + c);
+      ctx.lineTo(x + s, y + s - c);
+      ctx.lineTo(x + s - c, y + s);
+      ctx.lineTo(x + c, y + s);
+      ctx.lineTo(x, y + s - c);
+      ctx.lineTo(x, y + c);
+      ctx.closePath();
+      const face = ctx.createLinearGradient(x, y, x + s * 0.4, y + s);
+      face.addColorStop(0, COLORS.panelLight);
+      face.addColorStop(0.55, COLORS.panel);
+      face.addColorStop(1, COLORS.panelDark);
+      ctx.fillStyle = face;
+      ctx.fill();
+
+      // The charged cell in the middle of the plate: one lit hexagon, the motif the whole arena is
+      // built on, at its smallest scale. A wall of these is a grid of live cells.
+      ctx.save();
+      ctx.clip();
+      const cellPath = (r: number): void => {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = -Math.PI / 2 + (i * Math.PI) / 3;
+          const px = x + s / 2 + Math.cos(a) * r * s;
+          const py = y + s / 2 + Math.sin(a) * r * s;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
         }
-      }
+        ctx.closePath();
+      };
+      cellPath(0.3);
+      ctx.strokeStyle = rgba(COLORS.panelSeam, 0.9);
+      ctx.lineWidth = Math.max(0.7, s * 0.075);
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      cellPath(0.14);
+      ctx.fillStyle = rgba(COLORS.panelSeamHot, 0.8);
+      ctx.fill();
+      // Feed lines out of the cell to the plate edges, so neighbouring panels read as connected.
+      ctx.strokeStyle = rgba(COLORS.panelSeam, 0.45);
+      ctx.lineWidth = Math.max(0.5, s * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(x + s / 2, y);
+      ctx.lineTo(x + s / 2, y + s * 0.2);
+      ctx.moveTo(x + s / 2, y + s * 0.8);
+      ctx.lineTo(x + s / 2, y + s);
+      ctx.stroke();
+      // A cool bevel along the top-left, the one place the plate catches the arena's own light.
+      ctx.strokeStyle = rgba(COLORS.white, 0.16);
+      ctx.lineWidth = Math.max(0.6, s * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(x, y + s - c);
+      ctx.lineTo(x, y + c);
+      ctx.lineTo(x + c, y);
+      ctx.lineTo(x + s - c, y);
+      ctx.stroke();
+      ctx.restore();
       break;
     }
     case Tile.STEEL: {
-      const g = ctx.createLinearGradient(x, y, x + s, y + s);
-      g.addColorStop(0, COLORS.steelLight);
-      g.addColorStop(0.5, COLORS.steel);
-      g.addColorStop(1, COLORS.steelDark);
+      // Structural bulkhead: one bevelled slab, no fasteners, with a hazard band across the corner.
+      // Bright and cool against the dark panels, so "shooting this is wasted" reads at a glance.
+      const g = ctx.createLinearGradient(x, y, x + s * 0.6, y + s);
+      g.addColorStop(0, COLORS.hullLight);
+      g.addColorStop(0.55, COLORS.hull);
+      g.addColorStop(1, COLORS.hullShadow);
       ctx.fillStyle = g;
       ctx.fillRect(x, y, s, s);
-      ctx.fillStyle = COLORS.steelDark;
-      ctx.fillRect(x + s * 0.28, y + s * 0.28, s * 0.44, s * 0.44);
-      ctx.fillStyle = rgba(COLORS.cyan, 0.35);
-      ctx.fillRect(x + s * 0.34, y + s * 0.34, s * 0.32, s * 0.32);
-      ctx.strokeStyle = rgba('#000000', 0.5);
-      ctx.lineWidth = Math.max(0.5, s * 0.06);
-      ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, s - ctx.lineWidth, s - ctx.lineWidth);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, s, s);
+      ctx.clip();
+      // Hazard stripes: two diagonal bands through the lower-right, the way real load-bearing
+      // structure is marked. They run the same way on every tile, so a wall reads as one member.
+      ctx.strokeStyle = rgba(COLORS.hazard, 0.85);
+      ctx.lineWidth = Math.max(0.9, s * 0.11);
+      ctx.beginPath();
+      for (let i = 0; i < 2; i++) {
+        const o = s * (0.55 + i * 0.3);
+        ctx.moveTo(x + o, y + s);
+        ctx.lineTo(x + s, y + o);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // Bright top-left arris, dark bottom-right: the slab has thickness.
+      ctx.strokeStyle = rgba(COLORS.white, 0.55);
+      ctx.lineWidth = Math.max(0.6, s * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(x, y + s);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + s, y);
+      ctx.stroke();
+      ctx.strokeStyle = rgba('#000000', 0.55);
+      ctx.beginPath();
+      ctx.moveTo(x + s, y);
+      ctx.lineTo(x + s, y + s);
+      ctx.lineTo(x, y + s);
+      ctx.stroke();
       break;
     }
     case Tile.ICE: {
@@ -685,31 +757,70 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
       break;
     }
     case Tile.WATER: {
-      const g = ctx.createLinearGradient(x, y, x, y + s);
-      g.addColorStop(0, COLORS.water);
-      g.addColorStop(1, '#072744');
-      ctx.fillStyle = g;
+      // Plasma channel: a trench cut below the deck with a live core running down it. Impassable
+      // without the ferry, and bright enough at the centre that the lane it forms is obvious.
+      ctx.fillStyle = COLORS.water;
       ctx.fillRect(x, y, s, s);
+      // Flat by design: the containment mesh is what makes it read as a channel, and it has to run
+      // unbroken from tile to tile, so nothing here is centred on the tile itself. The travelling
+      // pulses that give it motion are drawn over the top each frame by the renderer.
+      ctx.fillStyle = rgba(COLORS.plasmaEdge, 0.38);
+      ctx.fillRect(x, y, s, s);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, s, s);
+      ctx.clip();
+      ctx.strokeStyle = rgba(COLORS.plasmaCore, 0.22);
+      ctx.lineWidth = Math.max(0.5, s * 0.045);
+      ctx.beginPath();
+      // A diagonal lattice at a quarter-tile pitch: it is continuous across the whole patch because
+      // the phase comes from the tile's own coordinates.
+      for (let k = -1; k < 4; k++) {
+        const o = (k + ((tx + ty) % 1)) * s * 0.5;
+        ctx.moveTo(x + o, y);
+        ctx.lineTo(x + o + s, y + s);
+        ctx.moveTo(x + o + s, y);
+        ctx.lineTo(x + o, y + s);
+      }
+      ctx.stroke();
+      ctx.restore();
       break;
     }
     case Tile.TREES: {
-      // overlay layer: neon foliage clusters
+      // Crystal canopy, drawn over the tanks: translucent shards growing out of the deck, thick
+      // enough to hide what is underneath and faceted enough that you can still tell it is cover
+      // and not a wall. Seven looks, chosen by tile coordinate.
       const seed = (tx * 73 + ty * 151) % 7;
-      ctx.fillStyle = rgba(COLORS.treesDark, 0.55);
+      ctx.fillStyle = rgba(COLORS.treesDark, 0.62);
       ctx.fillRect(x, y, s, s);
-      const blobs = [
-        [0.3, 0.3, 0.32],
-        [0.7, 0.35, 0.3],
-        [0.45, 0.7, 0.34],
-        [0.8, 0.75, 0.24],
-        [0.18, 0.72, 0.22],
+      // Each shard is a four-point sliver: base width, apex offset, height. Rotating the start
+      // index per tile is what makes the seven looks.
+      const shards: Array<[number, number, number, number]> = [
+        [0.28, 0.98, 0.34, 0.30],
+        [0.62, 1.02, 0.72, 0.26],
+        [0.46, 0.72, 0.52, 0.34],
+        [0.84, 0.94, 0.78, 0.22],
+        [0.14, 0.90, 0.22, 0.24],
+        [0.70, 0.66, 0.64, 0.20],
       ];
-      for (let i = 0; i < blobs.length; i++) {
-        const [bx, by, br] = blobs[(i + seed) % blobs.length];
+      for (let i = 0; i < shards.length; i++) {
+        const [bx, by, ax, hh] = shards[(i + seed) % shards.length];
+        const w = hh * 0.55;
         ctx.beginPath();
-        ctx.arc(x + bx * s, y + by * s, br * s, 0, Math.PI * 2);
-        ctx.fillStyle = i % 2 === 0 ? rgba(COLORS.trees, 0.75) : rgba(COLORS.treesLight, 0.6);
+        ctx.moveTo(x + (bx - w) * s, y + by * s);
+        ctx.lineTo(x + ax * s, y + (by - hh * 2) * s);
+        ctx.lineTo(x + (bx + w) * s, y + by * s);
+        ctx.lineTo(x + bx * s, y + (by - hh * 0.35) * s);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? rgba(COLORS.trees, 0.8) : rgba(COLORS.treesShard, 0.85);
         ctx.fill();
+        // one lit facet per shard, up its leading edge
+        ctx.strokeStyle = rgba(COLORS.treesLight, i % 2 === 0 ? 0.75 : 0.4);
+        ctx.lineWidth = Math.max(0.5, s * 0.035);
+        ctx.beginPath();
+        ctx.moveTo(x + (bx - w) * s, y + by * s);
+        ctx.lineTo(x + ax * s, y + (by - hh * 2) * s);
+        ctx.stroke();
       }
       break;
     }
@@ -719,55 +830,22 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
 }
 
 /* ---------------------------------------------------------------- *
- * Eagle emblem. All coordinates are in a 16x16 grid (u = s / 16) so the
- * whole bird fits the 2x2 tile base block. Drawn as a left half that is
- * mirrored, plus a central body / head / tail.
+ * The reactor core: the thing each side is defending. All coordinates
+ * are in a 16x16 grid (u = s / 16) so it fills the 2x2 tile block the
+ * simulation reserves for the base.
  * ---------------------------------------------------------------- */
 
-/**
- * One outstretched wing, swept up and out from the shoulder with four feather points along its
- * trailing edge. Mirrored for the other side.
- */
-const EAGLE_WING: Pt[] = [
-  [7.0, 6.0], [5.2, 3.9], [3.2, 2.1], [1.0, 1.1],
-  [2.8, 3.2], [1.2, 4.6], [3.4, 5.0], [1.9, 6.6],
-  [4.2, 6.8], [3.0, 8.4], [5.2, 8.2], [4.5, 9.9], [6.5, 8.5],
-];
-const EAGLE_BODY: Pt[] = [
-  [6.9, 5.0], [9.1, 5.0], [9.5, 8.4], [8.75, 11.5], [7.25, 11.5], [6.5, 8.4],
-];
-const EAGLE_TAIL: Pt[] = [
-  [7.1, 10.6], [8.9, 10.6], [10.2, 14.7], [8.7, 13.4], [8.0, 15.0], [7.3, 13.4], [5.8, 14.7],
-];
-const EAGLE_HEAD_C: Pt = [8, 3.8];
-/** Hooked beak. */
-const EAGLE_BEAK: Pt[] = [
-  [7.2, 3.2], [4.9, 4.0], [5.9, 4.6], [7.2, 4.9],
-];
-
-function mirrorX(pts: Pt[]): Pt[] {
-  return pts.map(([x, y]): Pt => [16 - x, y]);
-}
-
-function eaglePath(ctx: Ctx2D, u: number, part: 'wings' | 'body' | 'tail' | 'head' | 'beak'): void {
-  switch (part) {
-    case 'wings':
-      polyPath(ctx, u, EAGLE_WING);
-      break;
-    case 'body':
-      polyPath(ctx, u, EAGLE_BODY);
-      break;
-    case 'tail':
-      polyPath(ctx, u, EAGLE_TAIL);
-      break;
-    case 'beak':
-      polyPath(ctx, u, EAGLE_BEAK);
-      break;
-    default:
-      ctx.beginPath();
-      ctx.arc(EAGLE_HEAD_C[0] * u, EAGLE_HEAD_C[1] * u, 1.35 * u, 0, Math.PI * 2);
-      break;
+/** Regular hexagon centred in the 16x16 block, flat-topped, `r` in the same units. */
+function hexPath(ctx: Ctx2D, u: number, r: number, cx = 8, cy = 8): void {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    const px = (cx + Math.cos(a) * r) * u;
+    const py = (cy + Math.sin(a) * r) * u;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
   }
+  ctx.closePath();
 }
 
 function fillStroke(ctx: Ctx2D, fill: string | CanvasGradient, stroke: string, w: number): void {
@@ -785,97 +863,78 @@ export function drawBase(ctx: Ctx2D, x: number, y: number, s: number, dead: bool
   ctx.save();
   ctx.translate(x, y);
 
-  // pedestal
+  // Housing: the machined block the core is sunk into.
   roundRect(ctx, u * 0.7, u * 0.7, s - u * 1.4, s - u * 1.4, u * 2);
-  ctx.fillStyle = dead ? '#35281f' : '#131a2c';
+  ctx.fillStyle = dead ? '#171314' : '#101828';
   ctx.fill();
-  ctx.strokeStyle = dead ? rgba('#ff5e5e', 0.45) : rgba(COLORS.amber, 0.75);
+  ctx.strokeStyle = dead ? rgba('#ff5e5e', 0.45) : rgba(COLORS.base, 0.75);
   ctx.lineWidth = Math.max(1, u * 0.5);
   ctx.stroke();
 
+  const lw = Math.max(1, u * 0.34);
+
   if (dead) {
-    // scorch bloom
-    const sc = ctx.createRadialGradient(s / 2, s * 0.62, u * 0.5, s / 2, s * 0.62, s * 0.55);
-    sc.addColorStop(0, 'rgba(0,0,0,0.55)');
+    // Scorch bloom over the whole housing.
+    const sc = ctx.createRadialGradient(s / 2, s / 2, u * 0.5, s / 2, s / 2, s * 0.6);
+    sc.addColorStop(0, 'rgba(0,0,0,0.6)');
     sc.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sc;
     ctx.fillRect(0, 0, s, s);
 
-    const edge = rgba('#120d0a', 0.9);
-    const lw = Math.max(1, u * 0.34);
-    /** Charred metal: lit from the top-left, ember-warm at the bottom. */
-    const wreckFill = (light: boolean): CanvasGradient => {
-      const g = ctx.createLinearGradient(0, 0, s * 0.7, s);
-      g.addColorStop(0, light ? '#b5a189' : '#83705c');
-      g.addColorStop(1, light ? '#6b5a49' : '#473b30');
-      return g;
-    };
-    // left wing: snapped off half way, still attached and drooping
-    ctx.save();
-    ctx.translate(u * 0.6, u * 2.4);
-    ctx.rotate(0.26);
-    polyPath(ctx, u, [[7.0, 6.2], [5.4, 4.2], [3.9, 3.4], [4.6, 5.0], [3.2, 5.2], [4.2, 6.4], [3.6, 7.6], [5.0, 7.5], [4.7, 9.1], [6.6, 7.9]]);
-    fillStroke(ctx, wreckFill(true), edge, lw);
-    ctx.restore();
-    // right wing torn clean off, fallen across the plinth
-    ctx.save();
-    ctx.translate(s * 0.7, s * 0.66);
-    ctx.rotate(0.95);
-    ctx.translate(-8 * u, -6 * u);
-    polyPath(ctx, u, mirrorX([[7.0, 6.2], [5.4, 4.2], [3.6, 3.2], [4.4, 5.0], [3.0, 5.4], [4.2, 6.6], [3.4, 7.8], [5.0, 7.6], [4.7, 9.2], [6.6, 8.0]]));
-    fillStroke(ctx, wreckFill(false), edge, lw);
-    ctx.restore();
-    // torso: cracked open, the top of the chest blown away
-    ctx.save();
-    ctx.rotate(0.13);
-    ctx.translate(u * 0.1, u * 0.5);
-    polyPath(ctx, u, EAGLE_TAIL);
-    fillStroke(ctx, wreckFill(false), edge, lw);
-    polyPath(ctx, u, [[6.75, 7.7], [7.6, 6.3], [8.2, 7.6], [9.1, 6.0], [9.35, 8.4], [8.7, 11.5], [7.3, 11.5], [6.65, 8.4]]);
-    fillStroke(ctx, wreckFill(true), edge, lw);
-    ctx.strokeStyle = rgba('#0b0706', 0.9);
-    ctx.lineWidth = Math.max(1, u * 0.32);
+    // The containment ring, broken: three arcs of the hexagon left standing, buckled outwards.
+    const edge = rgba('#0d0a0a', 0.9);
+    const dull = ctx.createLinearGradient(0, 0, s * 0.7, s);
+    dull.addColorStop(0, '#6d6a72');
+    dull.addColorStop(1, '#332f36');
+    for (const [rot, r] of [[0.06, 5.6], [2.2, 5.2], [4.3, 5.9]] as Array<[number, number]>) {
+      ctx.save();
+      ctx.translate(8 * u, 8 * u);
+      ctx.rotate(rot);
+      ctx.translate(-8 * u, -8 * u);
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = (i * Math.PI) / 3;
+        const px = (8 + Math.cos(a) * r) * u;
+        const py = (8 + Math.sin(a) * r) * u;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = dull;
+      ctx.lineWidth = u * 1.15;
+      ctx.lineCap = 'butt';
+      ctx.stroke();
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = lw * 0.6;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // The well itself: burnt out, a black pit with a ragged lip.
+    hexPath(ctx, u, 3.4);
+    fillStroke(ctx, '#080608', rgba('#4a3a30', 0.9), lw);
+
+    // Cracks running out of the pit across the housing.
+    ctx.strokeStyle = rgba('#000000', 0.7);
+    ctx.lineWidth = Math.max(1, u * 0.3);
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(7.3 * u, 7.9 * u);
-    ctx.lineTo(8.4 * u, 9.4 * u);
-    ctx.lineTo(7.5 * u, 10.5 * u);
-    ctx.lineTo(8.5 * u, 11.5 * u);
+    for (const [a, len] of [[0.5, 5.4], [2.0, 6.2], [3.4, 5.0], [5.1, 6.0]] as Array<[number, number]>) {
+      const jitter = Math.cos(a * 3) * 0.5;
+      ctx.moveTo((8 + Math.cos(a) * 3.2) * u, (8 + Math.sin(a) * 3.2) * u);
+      ctx.lineTo((8 + Math.cos(a + 0.18) * (3.2 + len * 0.55)) * u, (8 + Math.sin(a + 0.18) * (3.2 + len * 0.55)) * u);
+      ctx.lineTo((8 + Math.cos(a - 0.1 + jitter * 0.1) * (3.2 + len)) * u, (8 + Math.sin(a - 0.1 + jitter * 0.1) * (3.2 + len)) * u);
+    }
     ctx.stroke();
-    ctx.restore();
-    // severed head lying at the foot of the plinth
-    ctx.save();
-    ctx.translate(s * 0.26, s * 0.84);
-    ctx.rotate(-1.35);
-    ctx.translate(-8 * u, -3.8 * u);
-    eaglePath(ctx, u, 'beak');
-    fillStroke(ctx, '#8a6a2c', edge, lw);
-    eaglePath(ctx, u, 'head');
-    fillStroke(ctx, wreckFill(true), edge, lw);
-    ctx.fillStyle = '#0b0706';
-    ctx.beginPath();
-    ctx.arc(8.35 * u, 3.5 * u, u * 0.42, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // cracks running out across the plinth
-    ctx.strokeStyle = rgba('#000000', 0.65);
-    ctx.lineWidth = Math.max(1, u * 0.28);
-    ctx.beginPath();
-    ctx.moveTo(2.0 * u, 12.6 * u);
-    ctx.lineTo(4.6 * u, 11.4 * u);
-    ctx.lineTo(6.0 * u, 12.4 * u);
-    ctx.moveTo(14.0 * u, 4.2 * u);
-    ctx.lineTo(11.4 * u, 5.4 * u);
-    ctx.lineTo(11.9 * u, 7.0 * u);
-    ctx.stroke();
-    // rubble shards
-    ctx.fillStyle = '#463a2e';
-    for (const [rx, ry, rr] of [[4.0, 13.9, 0.8], [11.6, 14.1, 0.6], [6.1, 14.6, 0.45], [12.9, 10.4, 0.55], [2.9, 9.8, 0.5]]) {
+
+    // Debris and a few embers still burning in the pit.
+    ctx.fillStyle = '#3b3238';
+    for (const [rx, ry, rr] of [[4.2, 12.6, 0.7], [11.9, 12.1, 0.55], [12.4, 4.6, 0.5], [3.6, 5.2, 0.45]] as Array<[number, number, number]>) {
       ctx.beginPath();
       ctx.arc(rx * u, ry * u, rr * u, 0, Math.PI * 2);
       ctx.fill();
     }
-    for (const [ex, ey] of [[5.0, 11.6], [10.6, 12.2], [7.8, 8.2]]) {
-      const eg = ctx.createRadialGradient(ex * u, ey * u, 0, ex * u, ey * u, u * 1.5);
+    for (const [ex, ey] of [[7.0, 8.6], [9.2, 7.4], [8.1, 9.6]] as Array<[number, number]>) {
+      const eg = ctx.createRadialGradient(ex * u, ey * u, 0, ex * u, ey * u, u * 1.6);
       eg.addColorStop(0, 'rgba(255,150,60,0.95)');
       eg.addColorStop(1, 'rgba(255,80,30,0)');
       ctx.fillStyle = eg;
@@ -885,91 +944,97 @@ export function drawBase(ctx: Ctx2D, x: number, y: number, s: number, dead: bool
     return;
   }
 
-  // amber halo behind the bird
-  const halo = ctx.createRadialGradient(s / 2, s * 0.5, u * 1, s / 2, s * 0.5, s * 0.5);
-  halo.addColorStop(0, rgba(COLORS.amber, 0.3));
-  halo.addColorStop(1, rgba(COLORS.amber, 0));
+  // Halo: the core lighting the block it sits in.
+  const halo = ctx.createRadialGradient(s / 2, s / 2, u * 1, s / 2, s / 2, s * 0.5);
+  halo.addColorStop(0, rgba(COLORS.base, 0.34));
+  halo.addColorStop(1, rgba(COLORS.base, 0));
   ctx.fillStyle = halo;
   ctx.fillRect(0, 0, s, s);
 
-  const gold = ctx.createLinearGradient(0, u * 3, 0, u * 14);
-  gold.addColorStop(0, COLORS.baseLight);
-  gold.addColorStop(0.5, COLORS.base);
-  gold.addColorStop(1, '#c78f1e');
-  const edge = rgba('#2a1c05', 0.85);
-  const lw = Math.max(1, u * 0.3);
+  const steel = ctx.createLinearGradient(0, u * 2, 0, u * 14);
+  steel.addColorStop(0, '#e6edf8');
+  steel.addColorStop(0.5, '#93a1b8');
+  steel.addColorStop(1, '#4a5468');
+  const edge = rgba('#0a1420', 0.85);
 
-  // tail first (behind the body)
-  eaglePath(ctx, u, 'tail');
-  fillStroke(ctx, gold, edge, lw);
-  // talons
-  ctx.strokeStyle = '#a0741a';
-  ctx.lineWidth = Math.max(1, u * 0.5);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(7.3 * u, 10.9 * u);
-  ctx.lineTo(6.3 * u, 12.6 * u);
-  ctx.lineTo(5.2 * u, 12.8 * u);
-  ctx.moveTo(6.5 * u, 12.5 * u);
-  ctx.lineTo(6.0 * u, 13.6 * u);
-  ctx.moveTo(8.7 * u, 10.9 * u);
-  ctx.lineTo(9.7 * u, 12.6 * u);
-  ctx.lineTo(10.8 * u, 12.8 * u);
-  ctx.moveTo(9.5 * u, 12.5 * u);
-  ctx.lineTo(10.0 * u, 13.6 * u);
-  ctx.stroke();
-  // wings
-  polyPath(ctx, u, EAGLE_WING);
-  fillStroke(ctx, gold, edge, lw);
-  polyPath(ctx, u, mirrorX(EAGLE_WING));
-  fillStroke(ctx, gold, edge, lw);
-  // body
-  eaglePath(ctx, u, 'body');
-  fillStroke(ctx, gold, edge, lw);
-  // chest shading + breast feathers
-  ctx.save();
-  eaglePath(ctx, u, 'body');
-  ctx.clip();
-  ctx.strokeStyle = rgba('#8a5f10', 0.55);
-  ctx.lineWidth = Math.max(1, u * 0.22);
-  for (let i = 0; i < 3; i++) {
-    const yy = (6.7 + i * 1.5) * u;
+  // Containment ring: a machined hexagonal frame around the well.
+  hexPath(ctx, u, 6.4);
+  fillStroke(ctx, steel, edge, lw);
+  // Six bolts where the frame meets the housing, one per vertex.
+  ctx.fillStyle = rgba('#0a1420', 0.55);
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
     ctx.beginPath();
-    ctx.arc(8 * u, yy, 1.15 * u, Math.PI * 0.15, Math.PI * 0.85);
-    ctx.stroke();
+    ctx.arc((8 + Math.cos(a) * 5.5) * u, (8 + Math.sin(a) * 5.5) * u, u * 0.42, 0, Math.PI * 2);
+    ctx.fill();
   }
+
+  // The well: a dark recess cut into the frame, so the core reads as sunk rather than stuck on.
+  hexPath(ctx, u, 4.7);
+  fillStroke(ctx, COLORS.baseDark, rgba('#000000', 0.6), lw * 0.8);
+
+  // Two rings stepping down into the well, each brighter than the last.
+  ctx.save();
+  hexPath(ctx, u, 4.7);
+  ctx.clip();
+  hexPath(ctx, u, 3.7);
+  ctx.strokeStyle = rgba(COLORS.base, 0.5);
+  ctx.lineWidth = Math.max(1, u * 0.28);
+  ctx.stroke();
+  hexPath(ctx, u, 2.7);
+  ctx.strokeStyle = rgba(COLORS.base, 0.8);
+  ctx.stroke();
+  // Light spilling up the walls of the well.
+  const spill = ctx.createRadialGradient(8 * u, 8 * u, u * 0.8, 8 * u, 8 * u, u * 4.7);
+  spill.addColorStop(0, rgba(COLORS.baseLight, 0.65));
+  spill.addColorStop(0.55, rgba(COLORS.base, 0.22));
+  spill.addColorStop(1, rgba(COLORS.base, 0));
+  ctx.fillStyle = spill;
+  ctx.fillRect(0, 0, s, s);
   ctx.restore();
-  // head + beak + eye — pale head over a gold body reads unmistakably as an eagle
-  eaglePath(ctx, u, 'beak');
-  fillStroke(ctx, '#ffa61f', edge, lw);
-  const headFill = ctx.createLinearGradient(0, u * 2.2, 0, u * 5.4);
-  headFill.addColorStop(0, '#fffaf0');
-  headFill.addColorStop(1, '#e8d8b0');
-  eaglePath(ctx, u, 'head');
-  fillStroke(ctx, headFill, edge, lw);
-  ctx.fillStyle = '#1a1005';
-  ctx.beginPath();
-  ctx.arc(8.35 * u, 3.5 * u, u * 0.4, 0, Math.PI * 2);
+
+  // The core: a bright hexagonal cell with a white centre.
+  hexPath(ctx, u, 1.9);
+  ctx.fillStyle = COLORS.base;
   ctx.fill();
-  ctx.fillStyle = rgba('#ffffff', 0.85);
-  ctx.beginPath();
-  ctx.arc(8.5 * u, 3.35 * u, u * 0.15, 0, Math.PI * 2);
+  ctx.strokeStyle = rgba(COLORS.baseLight, 0.9);
+  ctx.lineWidth = Math.max(1, u * 0.3);
+  ctx.stroke();
+  const hot = ctx.createRadialGradient(8 * u, 7.6 * u, 0, 8 * u, 8 * u, u * 1.9);
+  hot.addColorStop(0, '#ffffff');
+  hot.addColorStop(0.6, rgba(COLORS.baseLight, 0.85));
+  hot.addColorStop(1, rgba(COLORS.base, 0));
+  ctx.fillStyle = hot;
+  hexPath(ctx, u, 1.9);
   ctx.fill();
+
   ctx.restore();
 }
 
+/**
+ * One colour per pickup. The ids are the simulation's and never change; the names players read are
+ * in `i18n` under `pu.*` (Hardpoint, Reserve, Pulse, Stasis, Bulwark, Overshield, Ferry, Railgun).
+ */
 export const POWERUP_COLORS: Record<PowerUpKind, string> = {
   star: COLORS.amber,
   tank: COLORS.lime,
   grenade: COLORS.magenta,
   clock: COLORS.cyan,
   shovel: '#c9d2e3',
-  helmet: COLORS.cyan,
+  // Mint, not the cyan Stasis wears: the two are the pickups most often on the field together.
+  helmet: '#8fffd8',
   ship: '#7fb2ff',
   gun: '#ff8a5e',
 };
 
-/** Vector glyph for a power-up kind, centred in a (size x size) box. */
+/**
+ * Vector glyph for a power-up kind, centred in a (size x size) box.
+ *
+ * The `kind` strings are the simulation's ids and are older than the names players see: `star` is
+ * the Hardpoint, `tank` the Reserve, `grenade` the Pulse, `clock` Stasis, `shovel` the Bulwark,
+ * `helmet` the Overshield, `ship` the Ferry and `gun` the Railgun. Renaming the ids would invalidate
+ * every saved inventory and every replay, so the mapping lives here instead.
+ */
 export function drawPowerUpGlyph(ctx: Ctx2D, kind: PowerUpKind, size: number, color: string): void {
   const c = size / 2;
   const u = size / 16;
@@ -980,97 +1045,160 @@ export function drawPowerUpGlyph(ctx: Ctx2D, kind: PowerUpKind, size: number, co
   ctx.lineWidth = Math.max(1, u * 1.2);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  /** Regular hexagon centred on the glyph, point up. */
+  const hex = (r: number): void => {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 3;
+      const px = Math.cos(a) * r * u;
+      const py = Math.sin(a) * r * u;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  };
   switch (kind) {
+    // Hardpoint — one more tier of cannon. Three chevrons climbing.
     case 'star': {
+      ctx.lineWidth = Math.max(1, u * 1.5);
       ctx.beginPath();
-      for (let i = 0; i < 10; i++) {
-        const r = i % 2 === 0 ? u * 5.5 : u * 2.4;
-        const a = -Math.PI / 2 + (i * Math.PI) / 5;
-        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      for (let i = 0; i < 3; i++) {
+        const yy = (-4.4 + i * 3.6) * u;
+        ctx.moveTo(-u * 4.6, yy + u * 2.4);
+        ctx.lineTo(0, yy);
+        ctx.lineTo(u * 4.6, yy + u * 2.4);
       }
-      ctx.closePath();
-      ctx.fill();
+      ctx.stroke();
       break;
     }
+    // Reserve — a spare chassis in the bay: a filled cell with a cross cut out of it.
     case 'tank': {
-      roundRect(ctx, -u * 4, -u * 3, u * 8, u * 6, u);
+      hex(6.6);
       ctx.fill();
-      ctx.fillRect(-u * 1, -u * 6.5, u * 2, u * 4);
-      ctx.fillStyle = rgba('#000', 0.35);
-      ctx.fillRect(-u * 4, -u * 3, u * 1.6, u * 6);
-      ctx.fillRect(u * 2.4, -u * 3, u * 1.6, u * 6);
+      ctx.fillStyle = rgba('#000', 0.45);
+      ctx.fillRect(-u * 1.1, -u * 3.8, u * 2.2, u * 7.6);
+      ctx.fillRect(-u * 3.8, -u * 1.1, u * 7.6, u * 2.2);
       break;
     }
+    // Pulse — a shockwave off the deck. The rings are broken and the gaps rotate, so it reads as
+    // something travelling outwards rather than as a target.
     case 'grenade': {
       ctx.beginPath();
-      ctx.arc(0, u * 1, u * 4.5, 0, Math.PI * 2);
+      ctx.arc(0, 0, u * 1.7, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillRect(-u * 1.5, -u * 6, u * 3, u * 2.5);
-      ctx.beginPath();
-      ctx.arc(u * 3, -u * 5, u * 1.5, 0, Math.PI * 2);
-      ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        ctx.lineWidth = Math.max(0.8, u * (1.2 - i * 0.3));
+        const from = -Math.PI * 0.78 + i * 0.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, u * (3.4 + i * 1.7), from, from + Math.PI * 1.1);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, u * (3.4 + i * 1.7), from + Math.PI * 1.28, from + Math.PI * 1.78);
+        ctx.stroke();
+      }
       break;
     }
+    // Stasis — everything hostile pinned where it stands: a containment lattice, anchored at its
+    // six nodes. Deliberately not a snowflake; the slippery tiles are the ones that own frost here.
     case 'clock': {
-      ctx.beginPath();
-      ctx.arc(0, 0, u * 5.5, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(0.8, u * 0.8);
+      hex(5.4);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(0, -u * 3.5);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(u * 2.5, u * 1.5);
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 3;
+        ctx.moveTo(Math.cos(a) * u * 5.4, Math.sin(a) * u * 5.4);
+        ctx.lineTo(-Math.cos(a) * u * 5.4, -Math.sin(a) * u * 5.4);
+      }
       ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * u * 5.4, Math.sin(a) * u * 5.4, u * 1.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, u * 1.7, 0, Math.PI * 2);
+      ctx.fill();
       break;
     }
+    // Bulwark — hardened wall thrown up around the core.
     case 'shovel': {
+      ctx.lineWidth = Math.max(1.2, u * 1.9);
+      ctx.lineJoin = 'miter';
+      ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.moveTo(-u * 3, -u * 6);
-      ctx.lineTo(u * 3, 0);
+      ctx.moveTo(-u * 6, -u * 4.6);
+      ctx.lineTo(-u * 6, u * 5.2);
+      ctx.lineTo(u * 6, u * 5.2);
+      ctx.lineTo(u * 6, -u * 4.6);
+      ctx.stroke();
+      hex(2.4);
+      ctx.fill();
+      break;
+    }
+    // Overshield — a shield held clear of the hull, lit at its centre.
+    case 'helmet': {
+      ctx.lineWidth = Math.max(1, u * 1.3);
+      ctx.beginPath();
+      ctx.moveTo(0, -u * 6.2);
+      ctx.lineTo(u * 5.4, -u * 3.4);
+      ctx.lineTo(u * 5.4, u * 1.4);
+      ctx.lineTo(0, u * 6.4);
+      ctx.lineTo(-u * 5.4, u * 1.4);
+      ctx.lineTo(-u * 5.4, -u * 3.4);
+      ctx.closePath();
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(u * 1, u * 1);
-      ctx.lineTo(u * 5, -u * 1);
-      ctx.lineTo(u * 6, u * 4);
-      ctx.lineTo(u * 2, u * 6);
+      ctx.moveTo(0, -u * 3.0);
+      ctx.lineTo(u * 2.6, -u * 1.6);
+      ctx.lineTo(u * 2.6, u * 0.8);
+      ctx.lineTo(0, u * 3.2);
+      ctx.lineTo(-u * 2.6, u * 0.8);
+      ctx.lineTo(-u * 2.6, -u * 1.6);
       ctx.closePath();
       ctx.fill();
       break;
     }
-    case 'helmet': {
-      ctx.beginPath();
-      ctx.arc(0, u * 1, u * 5.5, Math.PI, 0);
-      ctx.lineTo(u * 5.5, u * 3);
-      ctx.lineTo(-u * 5.5, u * 3);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = rgba('#000', 0.35);
-      ctx.fillRect(-u * 5.5, u * 1, u * 11, u * 1);
-      break;
-    }
+    // Ferry — a lift pad that carries a tank across the plasma channel.
     case 'ship': {
       ctx.beginPath();
-      ctx.moveTo(-u * 6, u * 1);
-      ctx.lineTo(u * 6, u * 1);
-      ctx.lineTo(u * 4, u * 4.5);
-      ctx.lineTo(-u * 4, u * 4.5);
+      ctx.moveTo(-u * 6.4, -u * 1.4);
+      ctx.lineTo(u * 6.4, -u * 1.4);
+      ctx.lineTo(u * 4.8, u * 1.6);
+      ctx.lineTo(-u * 4.8, u * 1.6);
       ctx.closePath();
       ctx.fill();
-      ctx.fillRect(-u * 0.8, -u * 6, u * 1.6, u * 7);
+      // the load riding on it
+      roundRect(ctx, -u * 2.4, -u * 5.4, u * 4.8, u * 4, u * 0.8);
+      ctx.fill();
+      // thrust under the pad
+      ctx.lineWidth = Math.max(0.8, u * 0.95);
       ctx.beginPath();
-      ctx.moveTo(u * 0.8, -u * 5.5);
-      ctx.lineTo(u * 5, -u * 2);
-      ctx.lineTo(u * 0.8, -u * 1);
-      ctx.closePath();
-      ctx.fill();
+      for (let i = 0; i < 2; i++) {
+        const yy = u * (3.2 + i * 2.2);
+        ctx.moveTo(-u * 3.6, yy);
+        ctx.lineTo(0, yy + u * 1.5);
+        ctx.lineTo(u * 3.6, yy);
+      }
+      ctx.stroke();
       break;
     }
+    // Railgun — two rails and the round running between them.
     case 'gun': {
-      roundRect(ctx, -u * 6, -u * 1.2, u * 12, u * 2.4, u);
+      ctx.fillRect(-u * 6.4, -u * 4.2, u * 12, u * 1.5);
+      ctx.fillRect(-u * 6.4, u * 2.7, u * 12, u * 1.5);
+      ctx.fillRect(u * 5.6, -u * 4.2, u * 1.6, u * 8.4);
+      ctx.beginPath();
+      ctx.moveTo(-u * 3.4, -u * 1.5);
+      ctx.lineTo(u * 2.4, 0);
+      ctx.lineTo(-u * 3.4, u * 1.5);
+      ctx.lineTo(-u * 1.9, 0);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillRect(-u * 6, -u * 2.4, u * 3, u * 4.8);
-      ctx.fillRect(u * 3, -u * 1.9, u * 3, u * 3.8);
       break;
     }
   }
   ctx.restore();
 }
+

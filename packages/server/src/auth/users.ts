@@ -25,7 +25,7 @@ export const userDto = (u: UserRow): UserDTO => ({
  */
 const RESERVED_NICKNAMES = new Set([
   'admin', 'administrator', 'moderator', 'mod', 'staff', 'support', 'system', 'server', 'official',
-  'tank1990', 'tankbattle', 'anthropic', 'claude', 'me', 'you', 'null', 'undefined', 'deleted', 'bot',
+  'irongrid', 'tankbattle', 'anthropic', 'claude', 'me', 'you', 'null', 'undefined', 'deleted', 'bot',
 ]);
 
 export type NicknameProblem = 'taken' | 'reserved';

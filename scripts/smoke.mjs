@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Smoke-tests a deployed Tank 1990 server end to end.
+ * Smoke-tests a deployed IRONGRID server end to end.
  *
- *   node scripts/smoke.mjs https://tank1990.onrender.com
+ *   node scripts/smoke.mjs https://irongrid.onrender.com
  *
  * Checks the things a deploy can plausibly break without failing the build: the process is up, the
  * database opened, guest auth issues a usable token, the authenticated routes answer, and invite

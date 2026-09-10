@@ -28,7 +28,7 @@ export interface Ctx {
 export type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 
 /**
- * The externally visible origin of this request, e.g. `https://tank1990.onrender.com`.
+ * The externally visible origin of this request, e.g. `https://irongrid.onrender.com`.
  *
  * Derived from the proxy headers every PaaS sets, so links the server mints are absolute without
  * anyone having to configure the deployment's own address. `PUBLIC_URL` still overrides it, for the

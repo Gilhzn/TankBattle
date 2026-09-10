@@ -1,7 +1,7 @@
 {
-  "name": "Tank 1990 Online",
-  "short_name": "Tank1990",
-  "description": "Battle City / Tank 1990 remake with online co-op, versus and a store.",
+  "name": "IRONGRID",
+  "short_name": "IRONGRID",
+  "description": "A four-player tank arena on a destructible grid — online co-op and versus, on any device.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

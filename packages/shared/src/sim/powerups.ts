@@ -113,7 +113,7 @@ function applyToPlayer(state: GameState, kind: PowerUpKind, tank: Tank): void {
   state.events.push({ type: 'score', slot: p.slot, amount: POWERUP_SCORE, x: tank.x + TANK_SIZE / 2, y: tank.y + TANK_SIZE / 2 });
 }
 
-/** Tank 1990 twist: enemies can grab power-ups too, with inverted effects. */
+/** Enemies can grab pickups too, and what helps a player hurts them: the effects invert. */
 function applyToEnemy(state: GameState, kind: PowerUpKind, tank: Tank): void {
   switch (kind) {
     case 'star':

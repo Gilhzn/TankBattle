@@ -191,6 +191,7 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Pulses running along the plasma channel: two travelling bands per tile, phase-offset per tile. */
   private drawWater(time: number): void {
     if (!this.waterTiles.length) return;
     const ctx = this.ctx;
@@ -204,10 +205,11 @@ export class Renderer {
       const x = tx * ts;
       const y = ty * ts;
       const off = ((phase + ((tx + ty) % 4) * 0.25) % 1) * ts;
-      ctx.fillStyle = rgba(COLORS.waterLight, 0.22);
-      ctx.fillRect(x, y + off, ts, Math.max(1, ts * 0.12));
-      ctx.fillStyle = rgba(COLORS.waterGlow, 0.1);
-      ctx.fillRect(x, y + ((off + ts * 0.5) % ts), ts, Math.max(1, ts * 0.08));
+      // The bright pulse rides the core band, not the whole tile: the lip of the trench stays dark.
+      ctx.fillStyle = rgba(COLORS.plasmaCore, 0.3);
+      ctx.fillRect(x, y + off, ts, Math.max(1, ts * 0.1));
+      ctx.fillStyle = rgba(COLORS.waterGlow, 0.12);
+      ctx.fillRect(x, y + ((off + ts * 0.5) % ts), ts, Math.max(1, ts * 0.06));
     }
     ctx.restore();
   }

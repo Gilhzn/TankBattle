@@ -1,4 +1,4 @@
-import { MATCH_QUEUES, MATCH_QUEUE_KINDS, CATALOG_BY_SKU, type MatchQueue, type RoomStateMessage, type ServerMessage } from '@tank/shared';
+import { BRAND, MATCH_QUEUES, MATCH_QUEUE_KINDS, CATALOG_BY_SKU, type MatchQueue, type RoomStateMessage, type ServerMessage } from '@tank/shared';
 import { h, clear } from '../../app/h.js';
 import { navigate } from '../../app/router.js';
 import { settings } from '../../app/settings.js';
@@ -131,7 +131,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
     const allReady = room.players.every((p) => p.ready || p.id === room.hostId);
     // the host may start at any time (the server allows it); readiness is a courtesy signal for co-op
     const canStart = isHost && room.status === 'lobby' && room.players.length >= 1;
-    const shareText = t('lobby.shareText', { code: room.code });
+    const shareText = t('lobby.shareText', { code: room.code, game: BRAND.name });
     const copyBtn = button(t('common.copy'), {
       kind: 'ghost',
       className: 'small',

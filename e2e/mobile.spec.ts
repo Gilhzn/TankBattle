@@ -44,7 +44,7 @@ test.describe('mobile touch controls', () => {
   /** Settings are read once at boot, so this reloads onto the menu rather than the current screen. */
   async function setSettings(page: import('@playwright/test').Page, patch: Record<string, unknown>): Promise<void> {
     await page.evaluate((p) => {
-      const key = 'tank1990.settings.v1';
+      const key = 'irongrid.settings.v1';
       localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? '{}'), ...p }));
     }, patch);
     await page.goto('/#/');

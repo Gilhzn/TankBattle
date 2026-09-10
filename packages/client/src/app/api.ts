@@ -3,6 +3,7 @@ import type { FriendDTO, FriendRequestDTO, PresenceDTO, RatingProfileDTO } from 
 import { app, toast } from './store.js';
 import { settings } from './settings.js';
 import { t } from '../i18n/index.js';
+import { storageKey } from './storage.js';
 
 // ---------- DTOs (docs/API.md) ----------
 export interface UserDTO {
@@ -110,8 +111,8 @@ export class ApiError extends Error {
   }
 }
 
-const TOKEN_KEY = 'tank1990.token';
-const DEVICE_KEY = 'tank1990.deviceToken';
+const TOKEN_KEY = storageKey('token');
+const DEVICE_KEY = storageKey('deviceToken');
 
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
@@ -365,7 +366,7 @@ export interface PlayerProfileDTO {
 }
 
 // ---------- offline result queue ----------
-const PENDING_KEY = 'tank1990.pendingResults';
+const PENDING_KEY = storageKey('pendingResults');
 
 export function queueSoloResult(body: SoloResultBody): void {
   try {

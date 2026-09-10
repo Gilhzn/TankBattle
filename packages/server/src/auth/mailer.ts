@@ -1,3 +1,4 @@
+import { BRAND } from '@tank/shared';
 import type { Logger } from '../util/log.js';
 
 export interface Mail {
@@ -116,13 +117,13 @@ export function verificationMail(to: string, code: string, lang: 'en' | 'he' = '
   if (lang === 'he') {
     return {
       to,
-      subject: `${code} — קוד האימות שלך ל-Tank 1990`,
+      subject: `${code} — קוד האימות שלך ל-${BRAND.name}`,
       text: `קוד האימות שלך הוא ${code}\n\nהקוד תקף ל-15 דקות. אם לא ביקשת אותו, אפשר להתעלם מההודעה.`,
     };
   }
   return {
     to,
-    subject: `${code} is your Tank 1990 verification code`,
+    subject: `${code} is your ${BRAND.name} verification code`,
     text: `Your verification code is ${code}\n\nIt expires in 15 minutes. If you didn't ask for it, you can ignore this email.`,
   };
 }

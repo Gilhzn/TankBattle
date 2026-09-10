@@ -39,7 +39,11 @@ export function positionFree(state: MoveWorld, tank: Body | null, x: number, y: 
   return !tankOverlapsOthers(state, tank, x, y);
 }
 
-/** Snap to the 8px lane grid on the perpendicular axis when turning (classic Battle City feel). */
+/**
+ * Snap to the 8px lane grid on the perpendicular axis when turning. Without it a tank that is a
+ * pixel off a lane wedges on the corner of the gap it is aiming at, which reads as the controls
+ * ignoring you.
+ */
 function snapLane(state: MoveWorld, tank: Movable, dir: Dir): void {
   const vertical = dir === 0 || dir === 2;
   const snapped = Math.round((vertical ? tank.x : tank.y) / TILE) * TILE;

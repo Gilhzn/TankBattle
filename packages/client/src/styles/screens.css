@@ -163,25 +163,34 @@ html[dir='rtl'] .btn.back .chev {
   font-weight: 900;
   letter-spacing: 0.06em;
 }
-/* Stamped metal: a bright face over a dark rim, the way a game logo is die-cut. */
-.logo-tank {
+/*
+ * Stamped metal: a bright face over a dark rim, the way a game logo is die-cut. The two halves of
+ * the name are the same length, so they are set at the same size and tracking and stack into an
+ * even slab — cold iron over a live cyan grid.
+ */
+.logo-a,
+.logo-b {
   font-size: var(--fs-hero);
-  color: #fff3d0;
-  background: linear-gradient(180deg, #fffaf0 0%, var(--brass) 55%, var(--brass-deep) 100%);
+}
+/* The gradient is set with background-image, not the background shorthand: the shorthand would
+   reset background-clip and the letters would fill as solid blocks. */
+.logo-a {
+  color: #eef4ff;
+  background-image: linear-gradient(180deg, #ffffff 0%, #b9c6db 52%, #6f7d94 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 3px 0 var(--brass-edge)) drop-shadow(0 6px 18px rgba(255, 194, 71, 0.35));
+  filter: drop-shadow(0 3px 0 #2b3444) drop-shadow(0 6px 18px rgba(190, 210, 240, 0.28));
 }
-.logo-year {
-  font-size: calc(var(--fs-hero) * 1.16);
-  background: linear-gradient(180deg, #ffffff 0%, var(--cyan) 50%, var(--cyan-deep) 100%);
+.logo-b {
+  color: var(--cyan);
+  background-image: linear-gradient(180deg, #ffffff 0%, var(--cyan) 50%, var(--cyan-deep) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 3px 0 var(--cyan-edge)) drop-shadow(0 6px 22px rgba(94, 225, 255, 0.4));
 }
-.logo-online {
+.logo-sub {
   font-size: var(--fs-l);
   letter-spacing: 0.52em;
   margin-inline-start: 0.52em;

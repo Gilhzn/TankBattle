@@ -21,7 +21,7 @@ export interface GameStartInfo {
  */
 const HEARTBEAT_MS = TICK_MS * 5;
 const PING_MS = 5000;
-const SEAT_KEY = 'tank.seat';
+const SEAT_KEY = 'irongrid.seat';
 
 interface SavedSeat {
   roomId: string;

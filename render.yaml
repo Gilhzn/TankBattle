@@ -14,7 +14,7 @@
 # DB_PATH to /var/data/tank.db. That is the whole change.
 services:
   - type: web
-    name: tank1990
+    name: irongrid
     runtime: node
     plan: free
     # Where the server runs, which is most of what a player feels: from Israel, Oregon is ~240 ms

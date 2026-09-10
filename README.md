@@ -1,6 +1,10 @@
-# Tank 1990 Online
+# IRONGRID
 
-A modern, mobile-first remake of **Tank 1990 / Battle City** for the web: neon 2026 visuals, online co-op and versus multiplayer for up to 4 players, an installable PWA that plays offline, and a server-authoritative economy (coins, gems, boosts, skins, battle pass, daily rewards, gifting).
+A four-player tank arena on a destructible grid, built mobile-first for the web: neon 2026 visuals,
+online co-op and versus for up to 4 players, an installable PWA that plays offline, and a
+server-authoritative economy (coins, gems, boosts, skins, battle pass, daily rewards, gifting).
+
+Everything here is original work — see [NOTICE.md](NOTICE.md).
 
 ## Quick start
 

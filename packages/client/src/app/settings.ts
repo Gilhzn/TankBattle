@@ -1,4 +1,5 @@
 import { Store } from './store.js';
+import { storageKey } from './storage.js';
 
 export type Lang = 'en' | 'he';
 export type Handedness = 'left' | 'right';
@@ -17,7 +18,7 @@ export interface Settings {
   mpLoadout: string[];
 }
 
-const KEY = 'tank1990.settings.v1';
+const KEY = storageKey('settings.v1');
 
 function detectLang(): Lang {
   const langs = navigator.languages ?? [navigator.language];

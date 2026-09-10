@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'packages/client/dist');
 const outDir = join(root, 'dist-demo');
-const outFile = join(outDir, 'tank1990.html');
+const outFile = join(outDir, 'irongrid.html');
 
 /** A closing tag inside string data would end the host element early. */
 const safeForScript = (s) => s.replace(/<\/script/gi, '<\\/script');
@@ -24,7 +24,7 @@ if (!jsName || !cssName) throw new Error(`expected one .js and one .css in ${dis
 
 const js = readFileSync(join(dist, 'assets', jsName), 'utf8');
 const css = readFileSync(join(dist, 'assets', cssName), 'utf8');
-const title = (readFileSync(join(dist, 'index.html'), 'utf8').match(/<title>([^<]*)<\/title>/) ?? [, 'Tank 1990 Online'])[1];
+const title = (readFileSync(join(dist, 'index.html'), 'utf8').match(/<title>([^<]*)<\/title>/) ?? [, 'IRONGRID'])[1];
 
 const html = `<title>${title}</title>
 <style>

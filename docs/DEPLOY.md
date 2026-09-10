@@ -29,13 +29,14 @@ Render cannot change a service's region after it is created, so this means creat
 from the blueprint. On the free plan the database is wiped by every deploy anyway, so nothing is
 lost but the URL.
 
-1. **Free the name** (optional). Render service names are unique per account. Either delete the old
-   `tank1990` service first — which also releases `tank1990.onrender.com` — or skip this and let the
-   new service be called something else; its URL follows its name.
+1. **Free the name** (optional). Render service names are unique per account, and the blueprint now
+   asks for `irongrid`. If a service of that name already exists, either delete it first — which
+   also releases its `.onrender.com` address — or let the new service be called something else; its
+   URL follows its name.
 2. **Render → Blueprints → New Blueprint Instance.**
 3. Pick this repository, and **pick the branch the blueprint should track**. The blueprint lives on
-   `claude/tank-1990-multiplayer-ik03sk`; either select that branch, or merge it to `main` first and
-   select `main`. Render redeploys on every push to whichever branch you choose.
+   the feature branch this work is developed on; either select that branch, or merge it to `main`
+   first and select `main`. Render redeploys on every push to whichever branch you choose.
 4. Render reads `render.yaml`, shows one web service in **Frankfurt** on the free plan, and asks to
    apply. Apply.
 5. First build takes a few minutes (it installs the workspace and builds all three packages). The
