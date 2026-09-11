@@ -41,6 +41,14 @@ lost but the URL.
    apply. Apply.
 5. First build takes a few minutes (it installs the workspace and builds all three packages). The
    service is live when `/api/health` answers.
+6. **Retire the old service**, once the checks below pass against the new one. Suspend it for the
+   first day rather than deleting it, so there is something to fall back to; delete it after. Until
+   it is suspended it keeps rebuilding on every push to the tracked branch, and it keeps serving the
+   old address to anyone who already has the link — including the friend invites sent from it.
+
+Two free web services also cost twice as much of the account's free instance hours, which Render
+meters across the account rather than per service, so leaving the old one running is not free even
+while nobody is playing on it.
 
 ## Checking it worked
 
