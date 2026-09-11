@@ -21,14 +21,33 @@ export interface Config {
   googleClientId: string | null;
   /** Transactional email, for verification codes. Without it codes only reach the server log. */
   mail: { provider: string | null; apiKey: string | null; from: string | null; endpoint: string | null };
-  /** How long a player may sit in the ranked queue before the game finds them an opponent (ms). */
-  matchmakingTimeoutMs: number;
+  /**
+   * How long a player may sit in the ranked queue before the game fills the empty seats itself.
+   * A range, not a number: each search draws its own wait, so the moment the opponents appear is
+   * never the same twice and never reads as a scripted countdown.
+   */
+  matchmakingFill: { minMs: number; maxMs: number };
 }
 
 const int = (v: string | undefined, dflt: number): number => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : dflt;
 };
+
+/**
+ * The window a search waits in before the game fills the seats. `MATCHMAKING_TIMEOUT_MS` is the
+ * older single-value form and still works: it pins both ends together, which is what tests want
+ * when they need the wait to be exact rather than lifelike.
+ */
+function fillRange(env: NodeJS.ProcessEnv): { minMs: number; maxMs: number } {
+  if (env.MATCHMAKING_TIMEOUT_MS) {
+    const fixed = int(env.MATCHMAKING_TIMEOUT_MS, 9_000);
+    return { minMs: fixed, maxMs: fixed };
+  }
+  const minMs = int(env.MATCHMAKING_FILL_MIN_MS, 9_000);
+  const maxMs = int(env.MATCHMAKING_FILL_MAX_MS, 17_000);
+  return { minMs, maxMs: Math.max(minMs, maxMs) };
+}
 
 /** Builds the runtime config from environment variables (with documented defaults). */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -57,6 +76,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       from: env.MAIL_FROM || null,
       endpoint: env.MAIL_ENDPOINT || null,
     },
-    matchmakingTimeoutMs: int(env.MATCHMAKING_TIMEOUT_MS, 20_000),
+    matchmakingFill: fillRange(env),
   };
 }

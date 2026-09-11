@@ -16,8 +16,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    // The 20-second wait before a short-handed match starts is shortened here, so the test that
-    // covers it does not spend 20 seconds staring at a queue.
+    // In production a short-handed match waits a random 9-17s. MATCHMAKING_TIMEOUT_MS pins both
+    // ends of that range to one value, so the test neither waits that long nor races the randomness.
     command: `PORT=${PORT} DB_PATH=:memory: SECRET=e2e-secret MATCHMAKING_TIMEOUT_MS=8000 node packages/server/dist/index.js`,
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,

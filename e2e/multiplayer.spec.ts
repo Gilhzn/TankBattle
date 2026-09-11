@@ -39,10 +39,11 @@ test('a deathmatch starts anyway when the fourth player never turns up', async (
   await page.goto('/#/lobby');
   await page.getByTestId('queue-ffa').click();
   await expect(page.getByTestId('queue-found')).toContainText('4');
-  // The search says how long is left rather than spinning silently.
-  await expect(page.getByTestId('queue-countdown')).not.toBeEmpty();
+  // The search says what it is doing. It must never say how long is left.
+  await expect(page.getByTestId('queue-status')).not.toBeEmpty();
+  await expect(page.getByTestId('queue-status')).not.toContainText(/\d/);
 
-  // MATCHMAKING_TIMEOUT_MS is shortened for the e2e server; in production this wait is 20 seconds.
+  // MATCHMAKING_TIMEOUT_MS pins the e2e wait; in production it is a random 9-17 seconds.
   await expect(page.getByTestId('game-canvas')).toBeVisible({ timeout: 30_000 });
   await waitForTicks(page, 20);
   const hook = await readHook(page);

@@ -1,5 +1,5 @@
 import { Tile, type PowerUpKind, type TankShape, type TileId } from '@tank/shared';
-import { COLORS, mixHex, rgba, type Palette } from './theme.js';
+import { COLORS, LIGHT, mixHex, rgba, shade, type Palette } from './theme.js';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
@@ -260,7 +260,7 @@ export function drawTankSprite(ctx: Ctx2D, size: number, o: TankSpriteOptions): 
 
   // baked glow halo — players sit in a brighter pool of their team colour
   const gg = ctx.createRadialGradient(body / 2, body / 2, body * 0.3, body / 2, body / 2, body * 0.72);
-  gg.addColorStop(0, rgba(glow, player ? 0.4 : 0.16));
+  gg.addColorStop(0, rgba(glow, player ? 0.26 : 0.12));
   gg.addColorStop(1, rgba(glow, 0));
   ctx.fillStyle = gg;
   ctx.fillRect(-m, -m, size, size);
@@ -342,10 +342,14 @@ export function drawTankSprite(ctx: Ctx2D, size: number, o: TankSpriteOptions): 
   }
 
   // ---- hull ----------------------------------------------------------
+  // Form shading only. This gradient is baked into a sprite the renderer *rotates*, so anything
+  // directional in here would spin the light with the hull — the exact thing that made the tanks
+  // read as flat. The arena's own light is applied over the top at blit time, un-rotated, by
+  // `drawTankLight`, and the gradient below is kept shallow so the two do not fight.
   const hg = ctx.createLinearGradient(0, u * 1.5, 0, u * 14.5);
-  hg.addColorStop(0, player ? mixHex(primary, '#ffffff', 0.18) : primary);
+  hg.addColorStop(0, player ? mixHex(primary, '#ffffff', 0.1) : primary);
   hg.addColorStop(0.55, primary);
-  hg.addColorStop(1, secondary);
+  hg.addColorStop(1, mixHex(primary, secondary, 0.75));
   hullPath(ctx, u, c);
   ctx.fillStyle = hg;
   ctx.fill();
@@ -558,6 +562,50 @@ export function drawTankSprite(ctx: Ctx2D, size: number, o: TankSpriteOptions): 
  * circle around your own tank in every mode, which read as clutter rather than information — the
  * chevrons already say which tank is yours, and in solo there is nothing to disambiguate at all.
  */
+/**
+ * The shadow a tank drops on the deck. Drawn by the renderer *before* the hull and without the
+ * hull's rotation, so it stays to the south-east however the tank is facing — a shadow that turns
+ * with the tank is the tell that there is no light in the scene at all.
+ */
+export function drawTankShadow(ctx: Ctx2D, half: number): void {
+  const d = half * LIGHT.throw;
+  const g = ctx.createRadialGradient(d, d, half * 0.45, d, d, half * 1.1);
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.66)');
+  g.addColorStop(0.6, 'rgba(0, 0, 0, 0.4)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(d, d, half * 1.06, half * 0.96, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * The arena light across a tank, as a gradient to be composited over the *rotated* hull with
+ * `source-atop` — so it lands only on the tank's own pixels and follows its silhouette exactly,
+ * while itself staying square to the world. Bright out of the north-west, shaded into the
+ * south-east, and neutral through the middle so the paintwork keeps its colour.
+ *
+ * Built once per sprite size and reused: it depends on nothing but the canvas it fills.
+ */
+export function tankLightGradient(ctx: Ctx2D, size: number): CanvasGradient {
+  const g = ctx.createLinearGradient(0, 0, size, size);
+  g.addColorStop(0, 'rgba(255, 250, 235, 0.34)');
+  g.addColorStop(0.34, 'rgba(255, 250, 235, 0.07)');
+  g.addColorStop(0.52, 'rgba(0, 0, 0, 0)');
+  g.addColorStop(0.72, 'rgba(0, 0, 0, 0.16)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0.42)');
+  return g;
+}
+
+/** The specular the light leaves on the upper deck. Same composite, same world-fixed direction. */
+export function tankSpecular(ctx: Ctx2D, size: number): CanvasGradient {
+  const c = size * 0.33;
+  const g = ctx.createRadialGradient(c, c, 0, c, c, size * 0.24);
+  g.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+  g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  return g;
+}
+
 export function drawPlayerMarker(ctx: Ctx2D, half: number, color: string, self: boolean): void {
   const w = half * 0.42;
   const y = -half - half * 0.3; // sits clear of the barrel tip
@@ -598,36 +646,140 @@ export function drawBulletSprite(ctx: Ctx2D, size: number, color: string, glow: 
   ctx.fill();
 }
 
-/** Static tiles. `s` is the tile size in device px. */
-export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: number, tx: number, ty: number): void {
+/* ------------------------------------------------------------------ *
+ * Tiles. The camera looks straight down, so height is drawn as a
+ * chamfer: the top face is inset inside the tile and the four side
+ * faces fill the margin, lit by the one arena light in `LIGHT`. No ink
+ * leaves the tile, so what a player sees is exactly what collides.
+ *
+ * A face is drawn only where the block actually ends. `mask` says which
+ * neighbours are the same material, and a run of panels reads as one
+ * extruded mass instead of a grid of separate cubes.
+ * ------------------------------------------------------------------ */
+
+/** Neighbour bits: set when the tile on that side is the same material. */
+export const Side = { N: 1, E: 2, S: 4, W: 8 } as const;
+
+/** The inset of the top face on each side: zero where the block continues. */
+function insets(mask: number, h: number): [number, number, number, number] {
+  return [mask & Side.N ? 0 : h, mask & Side.E ? 0 : h, mask & Side.S ? 0 : h, mask & Side.W ? 0 : h];
+}
+
+/**
+ * The four chamfered side faces of a raised tile, each lit by its own aspect. Drawing them before
+ * the top face means the top's own edge covers the seam.
+ */
+function sideFaces(ctx: Ctx2D, x: number, y: number, s: number, mask: number, h: number, base: string): void {
+  const [n, e, sth, w] = insets(mask, h);
+  const x0 = x + w;
+  const y0 = y + n;
+  const x1 = x + s - e;
+  const y1 = y + s - sth;
+  const quad = (pts: number[][], f: number): void => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = shade(base, f);
+    ctx.fill();
+  };
+  if (n) quad([[x, y], [x + s, y], [x1, y0], [x0, y0]], LIGHT.faceN);
+  if (w) quad([[x, y], [x0, y0], [x0, y1], [x, y + s]], LIGHT.faceW);
+  if (e) quad([[x + s, y], [x + s, y + s], [x1, y1], [x1, y0]], LIGHT.faceE);
+  if (sth) quad([[x, y + s], [x0, y1], [x1, y1], [x + s, y + s]], LIGHT.faceS);
+}
+
+/** The rectangle the top face occupies, as [x, y, w, h]. */
+function topRect(x: number, y: number, s: number, mask: number, h: number): [number, number, number, number] {
+  const [n, e, sth, w] = insets(mask, h);
+  return [x + w, y + n, s - w - e, s - n - sth];
+}
+
+/**
+ * Fills the contact shadow for every raised tile at once, from a path of their squares.
+ *
+ * One path filled once rather than a rectangle per tile: overlapping per-tile fills would stack
+ * their alpha and leave a darker seam wherever two shadows met. The three passes at growing offset
+ * and falling alpha are the penumbra — a shadow with a hard edge reads as a painted rectangle.
+ *
+ * This is the one thing allowed outside a tile. A shadow implies no collision, so unlike a wall's
+ * own ink it cannot mislead anyone about where the wall ends. `fillTileSpill` is its other half:
+ * the light thrown the opposite way, onto the deck beside the faces that catch the arena light.
+ */
+export function fillTileSpill(ctx: Ctx2D, path: Path2D, s: number): void {
+  const d = s * LIGHT.spill;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const [scale, alpha] of [[1, 0.05], [0.55, 0.045]] as Array<[number, number]>) {
+    ctx.setTransform(1, 0, 0, 1, -d * scale, -d * scale);
+    ctx.fillStyle = `rgba(150, 190, 255, ${alpha})`;
+    ctx.fill(path);
+  }
+  ctx.restore();
+}
+
+export function fillTileShadows(ctx: Ctx2D, path: Path2D, s: number): void {
+  const d = s * LIGHT.throw;
+  ctx.save();
+  for (const [scale, alpha] of [[0.45, 0.2], [0.75, 0.16], [1, 0.13]] as Array<[number, number]>) {
+    ctx.setTransform(1, 0, 0, 1, d * scale, d * scale);
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fill(path);
+  }
+  ctx.restore();
+}
+
+/**
+ * Strokes only the edges of the top face that are actually exposed. Stroking all four would draw a
+ * seam through the middle of a slab and take a wall straight back to reading as a grid of tiles.
+ */
+function edges(ctx: Ctx2D, r: [number, number, number, number], mask: number, lit: boolean): void {
+  const [x, y, w, h] = r;
+  ctx.beginPath();
+  if (lit) {
+    if (!(mask & Side.W)) {
+      ctx.moveTo(x, y + h);
+      ctx.lineTo(x, y);
+    }
+    if (!(mask & Side.N)) {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w, y);
+    }
+  } else {
+    if (!(mask & Side.E)) {
+      ctx.moveTo(x + w, y);
+      ctx.lineTo(x + w, y + h);
+    }
+    if (!(mask & Side.S)) {
+      ctx.moveTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+    }
+  }
+  ctx.stroke();
+}
+
+/** Static tiles. `s` is the tile size in device px; `mask` marks same-material neighbours. */
+export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: number, tx: number, ty: number, mask = 0): void {
   switch (tile) {
     case Tile.BRICK: {
-      // Composite panel: one chamfered graphite plate per tile, with the amber seams that carry its
-      // charge running across the face. Warm light on a dark plate still reads "this one breaks".
-      const c = Math.max(1, s * 0.22); // corner chamfer
-      ctx.fillStyle = COLORS.panelDark;
-      ctx.fillRect(x, y, s, s);
-      ctx.beginPath();
-      ctx.moveTo(x + c, y);
-      ctx.lineTo(x + s - c, y);
-      ctx.lineTo(x + s, y + c);
-      ctx.lineTo(x + s, y + s - c);
-      ctx.lineTo(x + s - c, y + s);
-      ctx.lineTo(x + c, y + s);
-      ctx.lineTo(x, y + s - c);
-      ctx.lineTo(x, y + c);
-      ctx.closePath();
-      const face = ctx.createLinearGradient(x, y, x + s * 0.4, y + s);
+      // Composite panel: a plate with real thickness, its charged cell on the top face. Warm light
+      // on a dark plate still reads "this one breaks".
+      const h = s * LIGHT.panelHeight;
+      sideFaces(ctx, x, y, s, mask, h, COLORS.panel);
+      const [fx, fy, fw, fh] = topRect(x, y, s, mask, h);
+      const face = ctx.createLinearGradient(fx, fy, fx + fw * 0.4, fy + fh);
       face.addColorStop(0, COLORS.panelLight);
       face.addColorStop(0.55, COLORS.panel);
       face.addColorStop(1, COLORS.panelDark);
       ctx.fillStyle = face;
-      ctx.fill();
+      ctx.fillRect(fx, fy, fw, fh);
 
-      // The charged cell in the middle of the plate: one lit hexagon, the motif the whole arena is
-      // built on, at its smallest scale. A wall of these is a grid of live cells.
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(fx, fy, fw, fh);
       ctx.clip();
+      // The charged cell: one lit hexagon, the motif the whole arena is built on at its smallest
+      // scale. A wall of these is a grid of live cells.
       const cellPath = (r: number): void => {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -639,51 +791,52 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
         }
         ctx.closePath();
       };
-      cellPath(0.3);
+      cellPath(0.26);
       ctx.strokeStyle = rgba(COLORS.panelSeam, 0.9);
       ctx.lineWidth = Math.max(0.7, s * 0.075);
       ctx.lineJoin = 'round';
       ctx.stroke();
-      cellPath(0.14);
-      ctx.fillStyle = rgba(COLORS.panelSeamHot, 0.8);
+      cellPath(0.12);
+      ctx.fillStyle = rgba(COLORS.panelSeamHot, 0.85);
       ctx.fill();
-      // Feed lines out of the cell to the plate edges, so neighbouring panels read as connected.
-      ctx.strokeStyle = rgba(COLORS.panelSeam, 0.45);
+      // Feed lines to the plate edges, so neighbouring panels read as connected.
+      ctx.strokeStyle = rgba(COLORS.panelSeam, 0.4);
       ctx.lineWidth = Math.max(0.5, s * 0.05);
       ctx.beginPath();
-      ctx.moveTo(x + s / 2, y);
-      ctx.lineTo(x + s / 2, y + s * 0.2);
-      ctx.moveTo(x + s / 2, y + s * 0.8);
-      ctx.lineTo(x + s / 2, y + s);
-      ctx.stroke();
-      // A cool bevel along the top-left, the one place the plate catches the arena's own light.
-      ctx.strokeStyle = rgba(COLORS.white, 0.16);
-      ctx.lineWidth = Math.max(0.6, s * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(x, y + s - c);
-      ctx.lineTo(x, y + c);
-      ctx.lineTo(x + c, y);
-      ctx.lineTo(x + s - c, y);
+      ctx.moveTo(x + s / 2, fy);
+      ctx.lineTo(x + s / 2, y + s * 0.22);
+      ctx.moveTo(x + s / 2, y + s * 0.78);
+      ctx.lineTo(x + s / 2, fy + fh);
       ctx.stroke();
       ctx.restore();
+      // Arrises: lit where the plate turns towards the light, shaded where it turns away — and only
+      // where the plate actually ends.
+      const top: [number, number, number, number] = [fx, fy, fw, fh];
+      ctx.lineWidth = Math.max(0.6, s * 0.05);
+      ctx.strokeStyle = rgba(COLORS.white, 0.24);
+      edges(ctx, top, mask, true);
+      ctx.strokeStyle = rgba('#000000', 0.4);
+      edges(ctx, top, mask, false);
       break;
     }
     case Tile.STEEL: {
-      // Structural bulkhead: one bevelled slab, no fasteners, with a hazard band across the corner.
-      // Bright and cool against the dark panels, so "shooting this is wasted" reads at a glance.
-      const g = ctx.createLinearGradient(x, y, x + s * 0.6, y + s);
+      // Structural bulkhead: a heavier block than the panel and drawn as one, so "shooting this is
+      // wasted" reads before a shot is spent on it.
+      const h = s * LIGHT.hullHeight;
+      sideFaces(ctx, x, y, s, mask, h, COLORS.hullShadow);
+      const [fx, fy, fw, fh] = topRect(x, y, s, mask, h);
+      const g = ctx.createLinearGradient(fx, fy, fx + fw * 0.6, fy + fh);
       g.addColorStop(0, COLORS.hullLight);
       g.addColorStop(0.55, COLORS.hull);
       g.addColorStop(1, COLORS.hullShadow);
       ctx.fillStyle = g;
-      ctx.fillRect(x, y, s, s);
+      ctx.fillRect(fx, fy, fw, fh);
 
       ctx.save();
       ctx.beginPath();
-      ctx.rect(x, y, s, s);
+      ctx.rect(fx, fy, fw, fh);
       ctx.clip();
-      // Hazard stripes: two diagonal bands through the lower-right, the way real load-bearing
-      // structure is marked. They run the same way on every tile, so a wall reads as one member.
+      // Hazard stripes across the lower-right of the deck, the way load-bearing structure is marked.
       ctx.strokeStyle = rgba(COLORS.hazard, 0.85);
       ctx.lineWidth = Math.max(0.9, s * 0.11);
       ctx.beginPath();
@@ -695,25 +848,20 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
       ctx.stroke();
       ctx.restore();
 
-      // Bright top-left arris, dark bottom-right: the slab has thickness.
-      ctx.strokeStyle = rgba(COLORS.white, 0.55);
-      ctx.lineWidth = Math.max(0.6, s * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(x, y + s);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x + s, y);
-      ctx.stroke();
+      // A hard specular streak down the lit arris, the shaded one opposite: this is the edge that
+      // makes it read as metal rather than as a grey square. Only where the slab actually ends.
+      const deck: [number, number, number, number] = [fx, fy, fw, fh];
+      ctx.lineWidth = Math.max(0.7, s * 0.055);
+      ctx.strokeStyle = rgba(COLORS.white, 0.8);
+      edges(ctx, deck, mask, true);
       ctx.strokeStyle = rgba('#000000', 0.55);
-      ctx.beginPath();
-      ctx.moveTo(x + s, y);
-      ctx.lineTo(x + s, y + s);
-      ctx.lineTo(x, y + s);
-      ctx.stroke();
+      edges(ctx, deck, mask, false);
       break;
     }
     case Tile.ICE: {
-      // Packed snow. Opaque and matte so it reads as a surface rather than a pane of glass, with
-      // skid streaks along the drift: the tell that a tank carries its momentum across this tile.
+      // Packed snow with a hard crust. Opaque and matte so it still reads as a surface rather than
+      // a pane of glass — the skid streaks are the tell that a tank carries its momentum across it —
+      // but the crust catches the arena light, so it is cold and hard rather than flat white.
       const g = ctx.createLinearGradient(x, y, x, y + s);
       g.addColorStop(0, COLORS.snow);
       g.addColorStop(0.62, COLORS.snowShade);
@@ -721,8 +869,7 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
       ctx.fillStyle = g;
       ctx.fillRect(x, y, s, s);
 
-      // Wind-blown drift ridges: soft horizontal bands, offset per tile so a field of snow does
-      // not stripe into one continuous line.
+      // Wind-blown drift ridges, offset per tile so a field of snow does not stripe.
       const seed = (tx * 73 + ty * 151) % 5;
       ctx.fillStyle = rgba(COLORS.white, 0.5);
       for (let i = 0; i < 2; i++) {
@@ -741,60 +888,101 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
       ctx.lineTo(x + s * 0.88, y + s * 0.79);
       ctx.stroke();
 
-      // Granular sparkle: a few deterministic flecks so the surface looks crystalline up close.
-      ctx.fillStyle = rgba(COLORS.white, 0.85);
+      // The crust: a broad sheen off the light, and a bright thickness edge along the lit sides.
+      const gloss = ctx.createLinearGradient(x, y, x + s * 0.85, y + s * 0.85);
+      gloss.addColorStop(0, rgba(COLORS.white, 0.4));
+      gloss.addColorStop(0.45, rgba(COLORS.white, 0.05));
+      gloss.addColorStop(1, rgba(COLORS.snowDeep, 0.22));
+      ctx.fillStyle = gloss;
+      ctx.fillRect(x, y, s, s);
+      ctx.strokeStyle = rgba(COLORS.white, 0.72);
+      ctx.lineWidth = Math.max(0.6, s * 0.05);
+      // Inset by half the stroke: a line centred on the tile boundary spills into the neighbour,
+      // and a slab's own ink has to stay inside the square the simulation collides against.
+      const lip = ctx.lineWidth / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + lip, y + s - lip);
+      ctx.lineTo(x + lip, y + lip);
+      ctx.lineTo(x + s - lip, y + lip);
+      ctx.stroke();
+
+      // Granular sparkle: a few deterministic flecks so the crust looks crystalline up close.
+      ctx.fillStyle = rgba(COLORS.white, 0.9);
       for (let i = 0; i < 4; i++) {
-        const h = (tx * 31 + ty * 17 + i * 97) % 64;
-        const fx = x + s * (0.1 + ((h % 8) / 8) * 0.8);
-        const fy = y + s * (0.1 + (Math.floor(h / 8) / 8) * 0.8);
+        const hsh = (tx * 31 + ty * 17 + i * 97) % 64;
+        const fx = x + s * (0.1 + ((hsh % 8) / 8) * 0.8);
+        const fy = y + s * (0.1 + (Math.floor(hsh / 8) / 8) * 0.8);
         ctx.fillRect(fx, fy, Math.max(0.6, s * 0.05), Math.max(0.6, s * 0.05));
       }
 
-      // Cold rim so adjacent snow tiles still read as separate blocks against the dark field.
-      ctx.strokeStyle = rgba(COLORS.snowDeep, 0.5);
-      ctx.lineWidth = Math.max(0.5, s * 0.045);
-      ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, s - ctx.lineWidth, s - ctx.lineWidth);
+      // Cold rim on the shaded sides so adjacent snow still reads as separate slabs.
+      ctx.strokeStyle = rgba(COLORS.snowDeep, 0.55);
+      ctx.beginPath();
+      ctx.moveTo(x + s - lip, y + lip);
+      ctx.lineTo(x + s - lip, y + s - lip);
+      ctx.lineTo(x + lip, y + s - lip);
+      ctx.stroke();
       break;
     }
     case Tile.WATER: {
-      // Plasma channel: a trench cut below the deck with a live core running down it. Impassable
-      // without the ferry, and bright enough at the centre that the lane it forms is obvious.
-      ctx.fillStyle = COLORS.water;
-      ctx.fillRect(x, y, s, s);
-      // Flat by design: the containment mesh is what makes it read as a channel, and it has to run
-      // unbroken from tile to tile, so nothing here is centred on the tile itself. The travelling
-      // pulses that give it motion are drawn over the top each frame by the renderer.
+      // Plasma channel — the one thing in the arena that goes *down*. The depth is the whole read:
+      // the lip shades the near walls, and the floor of the trench glows well below it.
       ctx.fillStyle = rgba(COLORS.plasmaEdge, 0.38);
       ctx.fillRect(x, y, s, s);
       ctx.save();
       ctx.beginPath();
       ctx.rect(x, y, s, s);
       ctx.clip();
+      // A diagonal lattice at a half-tile pitch, continuous across the whole patch because its
+      // phase comes from the tile's own coordinates rather than its centre.
       ctx.strokeStyle = rgba(COLORS.plasmaCore, 0.22);
       ctx.lineWidth = Math.max(0.5, s * 0.045);
       ctx.beginPath();
-      // A diagonal lattice at a quarter-tile pitch: it is continuous across the whole patch because
-      // the phase comes from the tile's own coordinates.
       for (let k = -1; k < 4; k++) {
-        const o = (k + ((tx + ty) % 1)) * s * 0.5;
+        const o = k * s * 0.5;
         ctx.moveTo(x + o, y);
         ctx.lineTo(x + o + s, y + s);
         ctx.moveTo(x + o + s, y);
         ctx.lineTo(x + o, y + s);
       }
       ctx.stroke();
+      // Inner shadow under the north and west lips, where the light cannot reach the floor.
+      const d = s * 0.26;
+      const north = ctx.createLinearGradient(0, y, 0, y + d);
+      north.addColorStop(0, 'rgba(0,0,0,0.65)');
+      north.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = north;
+      if (!(mask & Side.N)) ctx.fillRect(x, y, s, d);
+      const west = ctx.createLinearGradient(x, 0, x + d, 0);
+      west.addColorStop(0, 'rgba(0,0,0,0.55)');
+      west.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = west;
+      if (!(mask & Side.W)) ctx.fillRect(x, y, d, s);
       ctx.restore();
+      // The far lip catches the light, which is what tells you the surface dropped away.
+      ctx.strokeStyle = rgba(COLORS.plasmaCore, 0.5);
+      ctx.lineWidth = Math.max(0.6, s * 0.05);
+      ctx.beginPath();
+      if (!(mask & Side.S)) {
+        ctx.moveTo(x, y + s - ctx.lineWidth / 2);
+        ctx.lineTo(x + s, y + s - ctx.lineWidth / 2);
+      }
+      if (!(mask & Side.E)) {
+        ctx.moveTo(x + s - ctx.lineWidth / 2, y);
+        ctx.lineTo(x + s - ctx.lineWidth / 2, y + s);
+      }
+      ctx.stroke();
       break;
     }
     case Tile.TREES: {
       // Crystal canopy, drawn over the tanks: translucent shards growing out of the deck, thick
-      // enough to hide what is underneath and faceted enough that you can still tell it is cover
-      // and not a wall. Seven looks, chosen by tile coordinate.
+      // enough to hide what is underneath and faceted enough that it still reads as cover rather
+      // than as a wall. Seven looks, chosen by tile coordinate. Its shadow is cast into the tile
+      // layer in a separate pass, so a tank drives through shade before it disappears under the
+      // canopy — which is what makes the canopy read as being above the ground.
       const seed = (tx * 73 + ty * 151) % 7;
       ctx.fillStyle = rgba(COLORS.treesDark, 0.62);
       ctx.fillRect(x, y, s, s);
-      // Each shard is a four-point sliver: base width, apex offset, height. Rotating the start
-      // index per tile is what makes the seven looks.
       const shards: Array<[number, number, number, number]> = [
         [0.28, 0.98, 0.34, 0.30],
         [0.62, 1.02, 0.72, 0.26],
@@ -812,10 +1000,15 @@ export function drawTile(ctx: Ctx2D, tile: TileId, x: number, y: number, s: numb
         ctx.lineTo(x + (bx + w) * s, y + by * s);
         ctx.lineTo(x + bx * s, y + (by - hh * 0.35) * s);
         ctx.closePath();
-        ctx.fillStyle = i % 2 === 0 ? rgba(COLORS.trees, 0.8) : rgba(COLORS.treesShard, 0.85);
+        // Each shard is lit down its north-west facet and falls away to the south-east, so the
+        // whole canopy catches the light from one direction.
+        const lit = ctx.createLinearGradient(x + (bx - w) * s, y + (by - hh * 2) * s, x + (bx + w) * s, y + by * s);
+        lit.addColorStop(0, rgba(COLORS.treesLight, i % 2 === 0 ? 0.85 : 0.6));
+        lit.addColorStop(0.45, rgba(COLORS.trees, 0.8));
+        lit.addColorStop(1, rgba(COLORS.treesShard, 0.92));
+        ctx.fillStyle = lit;
         ctx.fill();
-        // one lit facet per shard, up its leading edge
-        ctx.strokeStyle = rgba(COLORS.treesLight, i % 2 === 0 ? 0.75 : 0.4);
+        ctx.strokeStyle = rgba(COLORS.treesLight, i % 2 === 0 ? 0.8 : 0.45);
         ctx.lineWidth = Math.max(0.5, s * 0.035);
         ctx.beginPath();
         ctx.moveTo(x + (bx - w) * s, y + by * s);

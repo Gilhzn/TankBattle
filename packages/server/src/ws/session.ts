@@ -191,6 +191,8 @@ export class Session implements PlayerLink {
           queue: msg.queue,
           loadout: msg.loadout,
           queuedAt: this.deps.clock(),
+          // Overwritten by the matchmaker, which owns how long this search waits.
+          fillAt: 0,
         });
         this.queuedKind = msg.queue;
         return;
@@ -199,7 +201,7 @@ export class Session implements PlayerLink {
         const queue = this.queuedKind ?? '1v1';
         this.deps.matchmaker.leave(user.id);
         this.queuedKind = null;
-        this.send({ type: 'queued', queue, searching: false, since: this.deps.clock(), found: 0, needed: 0, startsInMs: 0 });
+        this.send({ type: 'queued', queue, searching: false, since: this.deps.clock(), found: 0, needed: 0 });
         return;
       }
       case 'inviteFriend':

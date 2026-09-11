@@ -25,14 +25,22 @@ export interface Ticket {
   queue: MatchQueue;
   loadout: string[];
   queuedAt: number;
+  /**
+   * When this search gives up on finding more humans. Drawn once per ticket, so two players who
+   * queue seconds apart wait different lengths and the fill never lands on a predictable beat.
+   */
+  fillAt: number;
 }
 
 export interface MatchmakerDeps {
   rooms: RoomManager;
   clock: Clock;
   log: Logger;
-  /** How long a search waits for a full match before starting with whoever is there. */
-  botTimeoutMs: number;
+  /**
+   * How long this search should wait for a full match before starting with whoever is there.
+   * Called once per ticket. A function rather than a number so tests can pin it.
+   */
+  fillAfterMs(): number;
   /** Chat voice given to bots. */
   chatResponder: ChatResponder;
   /** Called when a ticket is matched, so the session can bind to the room. */
@@ -43,9 +51,12 @@ export interface MatchmakerDeps {
  * Matchmaking: the only way into a public game.
  *
  * A player picks a queue — 1v1, 2v2, deathmatch or co-op — and is grouped with the closest-rated
- * players searching for the same thing, inside a window that widens the longer they wait. If the
- * seats have not filled by `botTimeoutMs` the match starts anyway with whoever is present, and only
- * the seats still missing below the queue's minimum are filled by the game.
+ * players searching for the same thing, inside a window that widens the longer they wait. Each
+ * ticket carries its own deadline; once one is reached the match starts with whoever is present,
+ * and only the seats still missing below the queue's minimum are filled by the game.
+ *
+ * The deadline is never sent to the player. A visible countdown announces that nobody is coming,
+ * which is exactly the thing a search should not say out loud.
  */
 export class Matchmaker {
   private queue: Ticket[] = [];
@@ -77,6 +88,7 @@ export class Matchmaker {
   /** Adds a player to the queue, replacing any ticket they already had. */
   enqueue(ticket: Ticket): void {
     const previous = this.leaveTicket(ticket.user.id);
+    ticket.fillAt = ticket.queuedAt + this.deps.fillAfterMs();
     this.queue.push(ticket);
     this.start();
     // Try straight away: players arriving together should not wait for the next sweep.
@@ -139,10 +151,12 @@ export class Matchmaker {
         this.form(group, kind);
         formed = true;
       }
-      // Anyone still here has waited out the search: start with whoever is present. Longest waiters
-      // first, and never more than the match has seats for — the rest keep searching.
+      // Once any one search has waited out its own deadline, start with whoever is present.
+      // Longest waiters first, and never more than the match has seats for — the rest keep
+      // searching. Taking the oldest tickets rather than only the expired one keeps the group fair
+      // when a newcomer happens to have drawn the shorter wait.
       const waiting = this.queue.filter((t) => t.queue === kind).sort((a, b) => a.queuedAt - b.queuedAt);
-      if (waiting.length > 0 && now - waiting[0].queuedAt >= this.deps.botTimeoutMs) {
+      if (waiting.some((t) => now >= t.fillAt)) {
         this.form(waiting.slice(0, MATCH_QUEUES[kind].size), kind);
         formed = true;
       }
@@ -204,15 +218,12 @@ export class Matchmaker {
     });
   }
 
-  /** Tells everyone still searching for `kind` how full their match is and how long is left. */
+  /** Tells everyone still searching for `kind` how full their match is. Never how long is left. */
   private notify(kind: MatchQueue): void {
-    const now = this.deps.clock();
     const needed = MATCH_QUEUES[kind].size;
     const waiting = this.queue.filter((t) => t.queue === kind);
-    const oldest = waiting.reduce((min, t) => Math.min(min, t.queuedAt), now);
-    const startsInMs = Math.max(0, this.deps.botTimeoutMs - (now - oldest));
     for (const t of waiting) {
-      t.link.send({ type: 'queued', queue: kind, searching: true, since: t.queuedAt, found: waiting.length, needed, startsInMs });
+      t.link.send({ type: 'queued', queue: kind, searching: true, since: t.queuedAt, found: waiting.length, needed });
     }
   }
 

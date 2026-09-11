@@ -6,7 +6,8 @@ import type { InterpBuffer } from '../game/interp.js';
 import type { Effects } from './effects.js';
 import { COLORS, paletteKey, rgba, tankPalette, type Palette } from './theme.js';
 import {
-  POWERUP_COLORS, SpriteCache, ctxOf, drawBase, drawBulletSprite, drawGlow, drawPlayerMarker, drawPowerUpGlyph, drawTankSprite, drawTile, makeCanvas, roundRect,
+  POWERUP_COLORS, Side, SpriteCache, ctxOf, drawBase, drawBulletSprite, drawGlow, drawPlayerMarker, drawPowerUpGlyph, drawTankShadow, drawTankSprite, drawTile, fillTileShadows, fillTileSpill, makeCanvas, roundRect,
+  tankLightGradient, tankSpecular,
   type AnyCanvas,
 } from './sprites.js';
 
@@ -53,6 +54,14 @@ export class Renderer {
   private angles = new Map<number, { a: number; seen: number }>();
   private frameSeq = 0;
   private lastTime = 0;
+  /**
+   * Where a tank is rotated and lit before it reaches the screen. One canvas for every tank in the
+   * match, reused each frame: the arena light has to land only on the hull's own pixels, and
+   * `source-atop` is the only way to get that without a clip path per chassis.
+   */
+  private tankScratch: AnyCanvas | null = null;
+  private tankLight: CanvasGradient | null = null;
+  private tankGloss: CanvasGradient | null = null;
   /** Scratch pairs for entity sampling: the draw loop asks for a position per entity per frame. */
   private posOut = { x: 0, y: 0 };
   private posFallback = { x: 0, y: 0 };
@@ -80,6 +89,10 @@ export class Renderer {
     this.sprites.clear();
     this.tileLayer = null;
     this.treeSprites = [];
+    // The scratch and its gradients are sized to the old sprite; a resize invalidates all three.
+    this.tankScratch = null;
+    this.tankLight = null;
+    this.tankGloss = null;
     this.tilesValid = false;
   }
 
@@ -87,12 +100,15 @@ export class Renderer {
    * What the renderer is holding, in bytes of canvas backing store — the part of the game's memory
    * that is not JavaScript heap and so does not show up in a heap snapshot.
    */
-  memory(): { canvas: number; tiles: number; sprites: number; spriteCount: number; total: number } {
+  memory(): { canvas: number; tiles: number; sprites: number; scratch: number; spriteCount: number; total: number } {
     const area = (c: AnyCanvas | null): number => (c ? c.width * c.height * 4 : 0);
     const canvas = this.size * this.size * 4;
     const tiles = area(this.tileLayer);
     const sprites = this.sprites.bytes;
-    return { canvas, tiles, sprites, spriteCount: this.sprites.size, total: canvas + tiles + sprites };
+    // The tank scratch is small, but a diagnostic that leaves things out is worse than no
+    // diagnostic: every canvas this renderer holds is counted here.
+    const scratch = area(this.tankScratch);
+    return { canvas, tiles, sprites, scratch, spriteCount: this.sprites.size, total: canvas + tiles + sprites + scratch };
   }
 
   /** Force the tile layer to rebuild (e.g. after a full snapshot). */
@@ -111,12 +127,14 @@ export class Renderer {
     if (!this.tileLayer) this.tileLayer = makeCanvas(size, size);
     const g = ctxOf(this.tileLayer);
     const ts = TILE * this.scale;
-    // ground
-    g.fillStyle = COLORS.bg;
+    // The deck. Lit towards the middle and falling away at the edges, so the arena reads as a lit
+    // floor rather than as a hole — and so the contact shadows have something to be seen against.
+    g.fillStyle = COLORS.floor;
     g.fillRect(0, 0, size, size);
-    const vg = g.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size * 0.8);
-    vg.addColorStop(0, 'rgba(20, 28, 52, 0.55)');
-    vg.addColorStop(1, 'rgba(7, 9, 15, 0)');
+    const vg = g.createRadialGradient(size / 2, size * 0.42, size * 0.05, size / 2, size / 2, size * 0.78);
+    vg.addColorStop(0, 'rgba(38, 50, 78, 0.7)');
+    vg.addColorStop(0.6, 'rgba(24, 32, 50, 0.25)');
+    vg.addColorStop(1, 'rgba(8, 11, 18, 0.55)');
     g.fillStyle = vg;
     g.fillRect(0, 0, size, size);
     g.strokeStyle = COLORS.grid;
@@ -145,6 +163,40 @@ export class Renderer {
     this.treeTiles = [];
     this.treeSprites = [];
     const treePx = Math.ceil(ts);
+
+    // Three passes, because a wall has to read as one extruded mass rather than a grid of separate
+    // cubes: the flat materials first, then every shadow, then the raised bodies on top. Doing it
+    // in one loop would let a tile drawn later paint over its neighbour's shadow. All of it lands
+    // in a layer built once per map and blitted thereafter, so the passes cost nothing per frame.
+    for (let ty = 0; ty < GRID; ty++) {
+      for (let tx = 0; tx < GRID; tx++) {
+        const i = ty * GRID + tx;
+        const t = tiles[i] as TileId;
+        if (t !== Tile.WATER && t !== Tile.ICE) continue;
+        if (t === Tile.WATER) this.waterTiles.push(i);
+        drawTile(g, t, tx * ts, ty * ts, ts, tx, ty, this.sameMask(tiles, tx, ty, t));
+      }
+    }
+
+    // Every raised tile contributes its square to one path, filled once. The canopy casts too: it
+    // is drawn above the tanks, but its shadow belongs down here on the floor, so a tank drives
+    // through shade before it disappears underneath — which is what tells you the canopy is over
+    // the ground rather than painted on it.
+    const shadows = new Path2D();
+    let raised = 0;
+    for (let ty = 0; ty < GRID; ty++) {
+      for (let tx = 0; tx < GRID; tx++) {
+        const t = tiles[ty * GRID + tx] as TileId;
+        if (t !== Tile.BRICK && t !== Tile.STEEL && t !== Tile.TREES) continue;
+        shadows.rect(tx * ts, ty * ts, ts, ts);
+        raised++;
+      }
+    }
+    if (raised) {
+      fillTileSpill(g, shadows, ts);
+      fillTileShadows(g, shadows, ts);
+    }
+
     for (let ty = 0; ty < GRID; ty++) {
       for (let tx = 0; tx < GRID; tx++) {
         const i = ty * GRID + tx;
@@ -160,19 +212,30 @@ export class Renderer {
         if (t === Tile.TREES) {
           this.treeTiles.push(i);
           // `drawTile` gives the tile one of seven looks from its coordinates; resolve each look
-          // once here so the per-frame pass is a blit and nothing else.
+          // once here so the per-frame pass is a blit and nothing else. The canopy needs no
+          // neighbour mask: it is cover, not a wall, and has no sides to hide.
           const seed = treeSeed(tx, ty);
           if (!this.treeSprites[seed]) {
             this.treeSprites[seed] = this.sprites.get(`trees|${seed}`, treePx, treePx, (c) => drawTile(c, Tile.TREES, 0, 0, ts, tx, ty));
           }
           continue;
         }
-        if (t === Tile.WATER) this.waterTiles.push(i);
-        drawTile(g, t, x, y, ts, tx, ty);
+        if (t === Tile.BRICK || t === Tile.STEEL) drawTile(g, t, x, y, ts, tx, ty, this.sameMask(tiles, tx, ty, t));
       }
     }
     this.tilesCopy.set(tiles);
     this.tilesValid = true;
+  }
+
+  /**
+   * Which of a tile's four neighbours are the same material, as `Side` bits. A block only shows a
+   * side face where it actually ends, so a run of panels is one slab and not a row of cubes. Tiles
+   * off the edge of the grid count as the same material, so the arena wall has no lit inner rim.
+   */
+  private sameMask(tiles: Uint8Array, tx: number, ty: number, t: TileId): number {
+    const at = (x: number, y: number): boolean =>
+      x < 0 || y < 0 || x >= GRID || y >= GRID ? true : tiles[y * GRID + x] === t;
+    return (at(tx, ty - 1) ? Side.N : 0) | (at(tx + 1, ty) ? Side.E : 0) | (at(tx, ty + 1) ? Side.S : 0) | (at(tx - 1, ty) ? Side.W : 0);
   }
 
   /** The canopy, over the tanks: one blit per foliage tile, from the seven sprites built with the map. */
@@ -219,6 +282,43 @@ export class Renderer {
     const size = Math.ceil(bodyPx / 0.8);
     const key = `tank|${paletteKey(palette)}|${frame}|${tier}|${isPlayer ? 1 : 0}`;
     return this.sprites.get(key, size, size, (c, w) => drawTankSprite(c, w, { palette, frame, tier, isPlayer }));
+  }
+
+  /**
+   * Rotates a tank sprite and lays the arena light over it, returning the scratch canvas to blit.
+   *
+   * The rotation goes on the hull; the light does not. Compositing with `source-atop` keeps the
+   * gradient on the tank's own pixels and off the deck around it, so the lit side stays north-west
+   * however the tank is facing — which is the whole difference between a sprite that spins and a
+   * solid object that turns.
+   */
+  private litTank(sprite: AnyCanvas, angle: number): AnyCanvas {
+    const w = sprite.width;
+    if (!this.tankScratch || this.tankScratch.width !== w) {
+      this.tankScratch = makeCanvas(w, w);
+      this.tankLight = null;
+      this.tankGloss = null;
+    }
+    const c = ctxOf(this.tankScratch);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    c.clearRect(0, 0, w, w);
+    c.save();
+    c.translate(w / 2, w / 2);
+    c.rotate(angle);
+    c.drawImage(sprite, -w / 2, -w / 2);
+    c.restore();
+    // Built once per sprite size: they depend on nothing else, and a gradient per tank per frame
+    // is exactly the kind of allocation the draw path was cleared of.
+    if (!this.tankLight) this.tankLight = tankLightGradient(c, w);
+    if (!this.tankGloss) this.tankGloss = tankSpecular(c, w);
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = this.tankLight;
+    c.fillRect(0, 0, w, w);
+    c.fillStyle = this.tankGloss;
+    c.fillRect(0, 0, w, w);
+    c.globalCompositeOperation = 'source-over';
+    return this.tankScratch;
   }
 
   /**
@@ -277,10 +377,11 @@ export class Renderer {
       const palette = tankPalette(kind, owner, skin, hp, maxHp);
       const sprite = this.tankSprite(palette, isPlayer, frame, isPlayer ? tier : 0);
       const sw = sprite.width;
-      ctx.save();
-      ctx.rotate(this.tankAngle(id, local ? local.dir : dir, dt, opts.reducedMotion));
-      ctx.drawImage(sprite, -sw / 2, -sw / 2);
-      ctx.restore();
+      // The shadow is drawn outside the rotation on purpose: the arena has one light, and it has
+      // to stay where it is while the hull turns underneath it.
+      drawTankShadow(ctx, half);
+      const angle = this.tankAngle(id, local ? local.dir : dir, dt, opts.reducedMotion);
+      ctx.drawImage(this.litTank(sprite, angle), -sw / 2, -sw / 2);
       if (isPlayer) drawPlayerMarker(ctx, half, palette.glow, owner === opts.mySlot);
       if (flags & TankFlag.FROZEN) {
         ctx.fillStyle = rgba(COLORS.cyan, 0.32);
@@ -407,6 +508,9 @@ export class Renderer {
     ctx.globalAlpha = 0.7 + 0.3 * Math.sin(time / 200);
     ctx.drawImage(glow, -glowSize / 2, -glowSize / 2);
     ctx.globalAlpha = 1;
+    // A pickup is a raised object like everything else here: without a shadow it floats while the
+    // walls and tanks sit on the deck, and one thing floating undoes the whole scene.
+    drawTankShadow(ctx, box * 0.42);
     ctx.scale(pulse, pulse);
     roundRect(ctx, -box * 0.46, -box * 0.46, box * 0.92, box * 0.92, box * 0.22);
     ctx.fillStyle = 'rgba(10, 14, 28, 0.85)';

@@ -96,7 +96,7 @@ export type ServerMessage =
    * How the search is going, sent whenever the queue's population changes: how many of the seats
    * are filled, and how long until the match starts with whoever is present.
    */
-  | { type: 'queued'; queue: MatchQueue; searching: boolean; since: number; found: number; needed: number; startsInMs: number }
+  | { type: 'queued'; queue: MatchQueue; searching: boolean; since: number; found: number; needed: number }
   /** A friend has opened a private room and is waiting there. */
   | { type: 'gameInvite'; fromId: string; fromName: string; code: string }
   | { type: 'gameStart'; seed: number; stage: number; snapshot: unknown; yourSlot: number }

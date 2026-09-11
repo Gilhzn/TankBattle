@@ -164,7 +164,11 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     rooms,
     clock,
     log: log.child('ranked'),
-    botTimeoutMs: config.matchmakingTimeoutMs,
+    // A fresh draw per search, so the wait before the seats are filled is never the same twice.
+    fillAfterMs: () => {
+      const { minMs, maxMs } = config.matchmakingFill;
+      return minMs + Math.floor(Math.random() * (maxMs - minMs + 1));
+    },
     chatResponder,
     onMatched: (ticket, room) => {
       ticket.link.bindRoom?.(room);

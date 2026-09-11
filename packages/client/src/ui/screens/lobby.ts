@@ -19,9 +19,16 @@ interface Search {
   queue: MatchQueue;
   found: number;
   needed: number;
-  /** When the match starts with whoever is present, as a local timestamp. */
-  deadline: number;
 }
+
+/**
+ * The two things the waiting screen says, alternating. Once the countdown is gone a single frozen
+ * line reads as a hang, and the server deliberately never tells the client how long is left — a
+ * visible timer only announces that nobody is coming.
+ */
+const SEARCH_LINES = ['queue.searching', 'queue.connecting'] as const;
+/** How long each line holds before the other takes over. */
+const SEARCH_LINE_MS = 4000;
 
 /** Multiplayer: pick a queue, get put into a match. Rooms exist only for friend invites. */
 export function lobbyScreen(root: HTMLElement): () => void {
@@ -81,7 +88,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
 
   const startSearch = (kind: MatchQueue): void => {
     // Shown before the server answers: the tap should feel instant even on a slow link.
-    search = { queue: kind, found: 1, needed: MATCH_QUEUES[kind].size, deadline: 0 };
+    search = { queue: kind, found: 1, needed: MATCH_QUEUES[kind].size };
     ws.matchQueue(kind, getLang(), MATCH_QUEUES[kind].mode === 'versus' ? [] : loadout);
     renderSearching();
   };
@@ -101,24 +108,22 @@ export function lobbyScreen(root: HTMLElement): () => void {
     const { queue, found, needed } = search;
     clear(body);
     const fill = h('i', { class: 'queue-fill-bar', attrs: { style: `width:${Math.round((found / needed) * 100)}%` } });
-    const countdown = h('p', { class: 'muted', dataset: { testid: 'queue-countdown' } });
+    const status = h('p', { dataset: { testid: 'queue-status' } });
+    // Held across re-renders so a `queued` update mid-sentence does not restart the line.
     const tick = (): void => {
-      if (!search) return;
-      const left = Math.ceil((search.deadline - Date.now()) / 1000);
-      countdown.textContent = !search.deadline ? '' : left > 0 ? t('queue.startsIn', { n: left }) : t('queue.starting');
+      status.textContent = t(SEARCH_LINES[Math.floor(Date.now() / SEARCH_LINE_MS) % SEARCH_LINES.length]);
     };
     window.clearInterval(searchTimer);
-    searchTimer = window.setInterval(tick, 250);
+    searchTimer = window.setInterval(tick, 500);
     tick();
 
     body.append(
       h('div', { class: 'lobby-status', dataset: { testid: 'lobby-status' } }),
       panel(
         h('h2', null, t(`queue.${queue}`)),
-        h('div', { class: 'searching' }, spinner(), h('p', null, t('queue.searching'))),
+        h('div', { class: 'searching' }, spinner(), status),
         h('div', { class: 'queue-progress' }, seatDots(needed, found), h('span', { dataset: { testid: 'queue-found' } }, t('queue.found', { n: found, m: needed }))),
         h('div', { class: 'queue-fill' }, fill),
-        countdown,
         button(t('queue.cancel'), { kind: 'ghost', big: true, testid: 'queue-cancel', onClick: cancelSearch }),
       ),
     );
@@ -254,8 +259,7 @@ export function lobbyScreen(root: HTMLElement): () => void {
           renderHome();
           break;
         }
-        // The countdown is kept as a local deadline, so no clock skew has to be reasoned about.
-        search = { queue: msg.queue, found: msg.found, needed: msg.needed, deadline: Date.now() + msg.startsInMs };
+        search = { queue: msg.queue, found: msg.found, needed: msg.needed };
         renderSearching();
         break;
       case 'matchFound':

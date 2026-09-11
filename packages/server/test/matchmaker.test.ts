@@ -34,6 +34,8 @@ describe('matchmaking', () => {
     queue: '1v1',
     loadout: [],
     queuedAt: now,
+    // Set by the matchmaker from `fillAfterMs` when the ticket is enqueued.
+    fillAt: 0,
     ...over,
   });
 
@@ -51,7 +53,8 @@ describe('matchmaking', () => {
       rooms,
       clock,
       log,
-      botTimeoutMs: 20_000,
+      // Pinned, so "the wait ran out" is a fact in these tests rather than a coin toss.
+      fillAfterMs: () => 20_000,
       chatResponder: new ScriptedChatResponder(),
       onMatched: (t, room) => matched.push({ ticket: t, room }),
     });
@@ -171,13 +174,60 @@ describe('matchmaking', () => {
     expect(progress().at(-1)).toEqual({ found: 1, needed: 4 });
   });
 
-  it('counts down to the start in the progress it sends', () => {
+  it('never tells the player how long is left', () => {
     const a = ticket('a', 1000, { queue: 'ffa' });
     mm.enqueue(a);
     now += 12_000;
     mm.enqueue(ticket('b', 1010, { queue: 'ffa' }));
-    const last = (a.link as Sink).sent.filter((m) => m.type === 'queued').at(-1) as { startsInMs: number };
-    expect(last.startsInMs).toBe(8_000);
+    // A countdown on the wire is a countdown on the screen, and the whole point is not to show one.
+    for (const m of (a.link as Sink).sent.filter((x) => x.type === 'queued')) {
+      expect(Object.keys(m)).not.toContain('startsInMs');
+    }
+  });
+
+  it('draws a fresh wait for every search', () => {
+    const draws: number[] = [];
+    const spread = new Matchmaker({
+      rooms,
+      clock,
+      log,
+      fillAfterMs: () => {
+        const ms = 9_000 + draws.length * 1_000;
+        draws.push(ms);
+        return ms;
+      },
+      chatResponder: new ScriptedChatResponder(),
+      onMatched: () => undefined,
+    });
+    const a = ticket('a', 1000, { queue: 'ffa' });
+    const b = ticket('b', 4000, { queue: 'ffa' });
+    spread.enqueue(a);
+    spread.enqueue(b);
+    // Each ticket carries its own deadline, so the fill never lands on one shared beat.
+    expect(a.fillAt).toBe(a.queuedAt + 9_000);
+    expect(b.fillAt).toBe(b.queuedAt + 10_000);
+    expect(a.fillAt).not.toBe(b.fillAt);
+    spread.stop();
+  });
+
+  it('starts as soon as any one search has waited out its own deadline', () => {
+    const short = ticket('short', 1000, { queue: 'ffa' });
+    const long = ticket('long', 4000, { queue: 'ffa' });
+    const mixed = new Matchmaker({
+      rooms,
+      clock,
+      log,
+      fillAfterMs: () => (mixed.size === 0 ? 30_000 : 10_000),
+      chatResponder: new ScriptedChatResponder(),
+      onMatched: (t, room) => matched.push({ ticket: t, room }),
+    });
+    mixed.enqueue(long);
+    mixed.enqueue(short);
+    now += 10_000;
+    (mixed as unknown as { pump(): void }).pump();
+    // `long` still has 20s on its own clock, but `short` expired and the match starts for both.
+    expect(matched.length).toBeGreaterThan(0);
+    mixed.stop();
   });
 
   it('sets the arena from the group\'s rating band', () => {
