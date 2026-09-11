@@ -1,28 +1,51 @@
 /*
- * Armoured-plate design system: every surface is a physical object — a dark keyline, a lit top
- * bevel, and a solid bottom edge that compresses when pressed. Colours come from the game's own
- * world (gunmetal, brass shell casings, tracer neon) rather than a generic UI palette.
+ * IRONGRID's design system, built on Apple's.
+ *
+ * The discipline, which every value below follows from: *hierarchy comes from layout and grouping,
+ * not from decoration*. Controls float in one material above the content; exactly one control per
+ * surface is tinted, and it is the primary action. Everything else shares a single neutral
+ * treatment and lets position, size and weight say what matters.
+ *
+ * The palette is still the game's own — brass, tracer cyan, magenta, lime — but those hues are now
+ * accent *roles* rather than a skin for every button. See .claude/skills/apple-design/.
  */
 :root {
   color-scheme: dark;
 
-  /* ground and plating */
+  /* ---- ground ---------------------------------------------------------- */
   --bg: #080c15;
   --bg-2: #0e1524;
   --bg-3: #16203a;
-  --plate: linear-gradient(180deg, #1d2842 0%, #141d33 100%);
-  --plate-raised: linear-gradient(180deg, #26355a 0%, #1a2440 100%);
-  --plate-sunken: linear-gradient(180deg, #0d1424 0%, #121a2e 100%);
-  --keyline: #05080f;
-  --bevel: rgba(255, 255, 255, 0.16);
-  --bevel-soft: rgba(255, 255, 255, 0.08);
 
-  --fg: #eef3ff;
-  --fg-muted: rgba(238, 243, 255, 0.66);
-  --fg-faint: rgba(238, 243, 255, 0.4);
+  /* ---- the material ----------------------------------------------------
+   * One variant everywhere, the equivalent of Apple's Regular glass: legible at any size over any
+   * content, so nothing has to be special-cased. `--mat-blur` is applied via backdrop-filter only
+   * where the content behind it is static — over the arena it costs more frame time than it is
+   * worth, and a plain fill at the same tone is indistinguishable at HUD sizes.
+   */
+  --mat: rgba(30, 40, 62, 0.66);
+  --mat-raised: rgba(41, 53, 80, 0.72);
+  --mat-sunken: rgba(12, 18, 32, 0.6);
+  --mat-solid: #1b2237;
+  --mat-blur: saturate(170%) blur(20px);
+  --mat-hairline: rgba(255, 255, 255, 0.12);
+  --mat-hairline-soft: rgba(255, 255, 255, 0.07);
+  /* Shadows ground an element so it stays findable; they are not decoration, so they stay quiet. */
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
+  --shadow-lift: 0 14px 40px rgba(0, 0, 0, 0.5);
+
+  --fg: #f2f5ff;
+  --fg-muted: rgba(242, 245, 255, 0.68);
+  --fg-faint: rgba(242, 245, 255, 0.42);
   --ink: #06101c;
 
-  /* accents: brass drives the primary action, tracer colours carry meaning */
+  /* ---- accent roles ----------------------------------------------------
+   * `--accent` is the tint, and it is spent on one control per surface. The rest are semantic:
+   * they carry meaning in content (a team colour, a rarity, a warning), never a button skin.
+   */
+  --accent: #ffc247;
+  --accent-deep: #e08c12;
+  --accent-ink: #2a1b00;
   --brass: #ffc247;
   --brass-deep: #e08c12;
   --brass-edge: #6d3f05;
@@ -40,24 +63,51 @@
   --danger-deep: #d33b3b;
   --danger-edge: #6b1414;
 
-  /* depth */
-  --stroke: 2px;
-  --edge: 5px;
-  --edge-sm: 3px;
-  --shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
-  --shadow-lift: 0 20px 48px rgba(0, 0, 0, 0.6);
-  --plate-inner: inset 0 var(--stroke) 0 var(--bevel), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  /* ---- geometry --------------------------------------------------------
+   * Radii are concentric: an element nested inside another sets its radius to the parent's minus
+   * the padding between them. Matching the parent's radius instead is what makes corners look
+   * pinched, and it is one of the loudest amateur tells there is.
+   */
+  --pad: 16px;
+  --r-screen: 28px;
+  --r-card: 20px;
+  --r-in-card: max(2px, calc(var(--r-card) - var(--pad)));
+  --r-chip: 12px;
+  --r-capsule: 999px;
+  /* Older names, kept so the 1400 lines of screen CSS keep resolving. */
+  --radius-s: var(--r-chip);
+  --radius: var(--r-card);
+  --radius-l: var(--r-screen);
 
-  /* kept for compatibility with existing panel classes */
-  --glass: linear-gradient(180deg, #1d2842 0%, #141d33 100%);
-  --glass-strong: linear-gradient(180deg, #22304f 0%, #161f38 100%);
-  --glass-border: var(--keyline);
+  /* A hairline, not a keyline: the material's edge catches light, it does not draw a border. */
+  --stroke: 1px;
+  --keyline: var(--mat-hairline);
+  --bevel: rgba(255, 255, 255, 0.14);
+  --bevel-soft: rgba(255, 255, 255, 0.07);
+  /* The hard bottom edge is gone; depth now comes from the material and its shadow. */
+  --edge: 0px;
+  --edge-sm: 0px;
+  --plate-inner: inset 0 1px 0 var(--bevel-soft);
+
+  /* Compatibility aliases for the existing panel/card rules. */
+  --plate: var(--mat);
+  --plate-raised: var(--mat-raised);
+  --plate-sunken: var(--mat-sunken);
+  --glass: var(--mat);
+  --glass-strong: var(--mat-raised);
+  --glass-border: var(--mat-hairline);
   --glass-glow: var(--plate-inner);
 
-  --radius-s: 10px;
-  --radius: 14px;
-  --radius-l: 20px;
+  /* Text stamping was decoration standing in for hierarchy. Weight and size carry it now. */
+  --text-stamp: none;
+
+  /* ---- targets ---------------------------------------------------------
+   * 44px is Apple's touch standard; 48 is the comfortable default this game uses. 28 is the floor,
+   * and only for controls a player reaches for rarely.
+   */
   --tap: 48px;
+  --tap-min: 28px;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -65,16 +115,19 @@
   --space-5: 24px;
   --space-6: 32px;
 
+  /* ---- type ------------------------------------------------------------
+   * Bolder and larger than before. The floor on `--fs` is 17px, which is Apple's minimum for body
+   * text in a game on a phone — the old scale bottomed out near 15.7px, below it. Nothing in the
+   * product goes under 13px, and the 11px absolute floor is never approached.
+   */
   --font: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, 'Heebo', 'Noto Sans Hebrew', sans-serif;
   --font-display: ui-rounded, 'SF Pro Rounded', 'Segoe UI Black', system-ui, sans-serif;
-  --fs-xs: clamp(0.72rem, 0.68rem + 0.2vw, 0.82rem);
-  --fs-s: clamp(0.85rem, 0.8rem + 0.3vw, 0.95rem);
-  --fs: clamp(0.98rem, 0.9rem + 0.4vw, 1.1rem);
-  --fs-l: clamp(1.15rem, 1rem + 0.8vw, 1.4rem);
-  --fs-xl: clamp(1.5rem, 1.2rem + 1.6vw, 2.2rem);
+  --fs-xs: clamp(0.8125rem, 0.78rem + 0.16vw, 0.875rem);
+  --fs-s: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  --fs: clamp(1.0625rem, 1rem + 0.3vw, 1.1875rem);
+  --fs-l: clamp(1.3125rem, 1.2rem + 0.6vw, 1.5rem);
+  --fs-xl: clamp(1.75rem, 1.4rem + 1.4vw, 2.25rem);
   --fs-hero: clamp(2.4rem, 1.6rem + 5vw, 4.6rem);
-  /* stamped display text: a dark rim so headings read on any plate */
-  --text-stamp: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 0, 0, 0.35);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -87,4 +140,32 @@
 html.reduced-motion,
 html.reduced-motion * {
   --motion: 0;
+}
+
+/*
+ * Accessibility is a behaviour the material owes the user, not an extra. Reduced transparency makes
+ * it frostier and then opaque; increased contrast pushes surfaces towards black and white with a
+ * border that does the separating instead of the material.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --mat: rgba(27, 34, 55, 0.96);
+    --mat-raised: rgba(38, 48, 73, 0.97);
+    --mat-sunken: rgba(11, 16, 28, 0.96);
+    --mat-blur: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --mat: #0b1120;
+    --mat-raised: #131c30;
+    --mat-sunken: #070c16;
+    --mat-blur: none;
+    --mat-hairline: rgba(255, 255, 255, 0.68);
+    --mat-hairline-soft: rgba(255, 255, 255, 0.5);
+    --stroke: 2px;
+    --fg-muted: rgba(242, 245, 255, 0.92);
+    --fg-faint: rgba(242, 245, 255, 0.75);
+  }
 }

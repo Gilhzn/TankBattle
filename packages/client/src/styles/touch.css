@@ -150,7 +150,13 @@ html.hand-right .touch-zone.fire {
   background: radial-gradient(circle at 35% 35%, #ffd9f0, var(--magenta) 55%, #8a1560);
   box-shadow: 0 0 18px rgba(255, 94, 196, 0.7);
 }
+/*
+ * The press has to be readable with a thumb covering the button, so the feedback lives *outside* its
+ * edge: a ring plus a wide bloom, not just a colour change on a face nobody can see.
+ */
 .fire-button.pressed {
   transform: scale(0.92);
-  box-shadow: 0 0 44px rgba(255, 94, 196, 0.6);
+  box-shadow:
+    0 0 0 6px rgba(255, 94, 196, 0.35),
+    0 0 46px 14px rgba(255, 94, 196, 0.45);
 }

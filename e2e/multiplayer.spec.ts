@@ -84,7 +84,12 @@ test('four players fit the HUD without eating the map', async ({ browser }) => {
   expect(hud.chips).toBe(4);
   // One chip per player stacked full-width was 131px of strip and 203px of HUD; the map was 278px
   // wide on this viewport. The numbers are what the player actually feels here, so assert them.
-  expect(hud.stripHeight).toBeLessThanOrEqual(80);
+  //
+  // The strip budget went from 80 to 84 when the HUD labels moved to a 13px floor for legibility.
+  // It buys nothing back to squeeze it: the two assertions below are the ones that protect the map,
+  // and both still hold — the field is limited by the viewport's width here, not by the HUD, so the
+  // four pixels come out of spare vertical space rather than off the arena.
+  expect(hud.stripHeight).toBeLessThanOrEqual(84);
   expect(hud.hudHeight).toBeLessThanOrEqual(140);
   expect(hud.canvasWidth).toBe(412);
   expect(hud.scrollsSideways).toBe(false);

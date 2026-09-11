@@ -203,23 +203,34 @@ html[dir='rtl'] .btn.back .chev {
   margin-block-start: var(--space-3);
   font-weight: 600;
 }
+/*
+ * Grouping is the hierarchy here, and the only thing that makes it visible is space: the gap
+ * between groups has to be clearly larger than the gap inside one, or there are no groups, only a
+ * list of ten buttons.
+ */
 .menu-nav {
   width: min(520px, 100%);
   margin-inline: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
+}
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 .menu-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 .menu-grid .btn {
   min-height: 54px;
   font-size: var(--fs);
 }
 .daily-btn {
+  color: var(--accent);
   animation: pulse 2.2s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -382,15 +393,22 @@ html[dir='rtl'] .btn.back .chev {
   flex-wrap: nowrap;
   gap: 0 6px;
   min-width: 0;
-  padding: 1px 6px;
-  border-radius: 8px;
+  /*
+   * Dense, incidental information, so it sets tighter than body text — Apple's floor for a label
+   * like this is 11pt and these are 13px. The padding and line-height are held down deliberately:
+   * the field is sized from whatever height the HUD leaves behind, so every pixel spent here is a
+   * pixel taken off the map, and with four players that is the thing players notice first.
+   */
+  padding: 1px 8px;
+  line-height: 1.25;
+  border-radius: var(--r-chip);
   border-inline-start: 3px solid var(--pc, var(--amber));
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--mat-sunken);
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
 }
 .hud-player.me {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--mat-raised);
   box-shadow: 0 0 0 1px var(--pc, var(--amber));
 }
 .hud-player-name {
@@ -926,7 +944,13 @@ html[dir='rtl'] .btn.back .chev {
   grid-template-areas: 'icon body' 'actions actions';
   gap: var(--space-3);
   padding: var(--space-4);
-  border-radius: var(--radius-l);
+  border-radius: var(--r-card);
+  /* Concentric: what sits inside this card curves by the card's radius less the padding, so the
+     gap between the two curves stays constant and the corners do not look pinched. */
+  --r-inner: max(2px, calc(var(--r-card) - var(--space-4)));
+}
+.store-item .item-icon.lg {
+  border-radius: calc(var(--r-inner) + 8px);
 }
 .store-item-icon {
   grid-area: icon;
@@ -950,24 +974,40 @@ html[dir='rtl'] .btn.back .chev {
 .store-item-actions .btn {
   flex: 1;
 }
+/*
+ * One tinted badge per screen. "Best value" is the recommendation, so it takes the tint; the others
+ * still mark their item but do it on the neutral material, because three filled badges in a column
+ * is three things claiming to be the most important.
+ */
 .tag {
   position: absolute;
   inset-block-start: -8px;
   inset-inline-end: var(--space-4);
-  padding: 2px 10px;
-  border-radius: 999px;
+  padding: 3px 10px;
+  border-radius: var(--r-capsule);
   font-size: var(--fs-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: var(--amber);
-  color: #1a1000;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--mat-raised);
+  border: var(--stroke) solid var(--mat-hairline);
+  color: var(--fg-muted);
 }
-.tag.popular {
-  background: var(--magenta);
+.tag.best {
+  background: var(--accent);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--accent-ink);
 }
-.tag.new {
-  background: var(--lime);
+
+/* The row action: neutral face, tinted label — the emphasis stays available for the one that
+ * deserves it, which is the recommended item's filled button below. */
+.btn.buy {
+  color: var(--accent);
+  font-weight: 750;
+}
+.store-item.best .btn.buy {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--accent-ink);
 }
 .store-notice {
   margin-block: var(--space-2);
@@ -1491,4 +1531,44 @@ html[dir='rtl'] .btn.back .chev {
   background: rgba(255, 209, 102, 0.1);
   color: var(--fg);
   font-size: var(--fs-s);
+}
+
+
+/*
+ * The HUD is the functional layer floating over the arena, so it reads off a material rather than
+ * off the game art. Deliberately a flat fill and not a backdrop blur: the canvas underneath repaints
+ * every frame, and blurring it was the one change in this redesign that could cost real frame time.
+ */
+.hud-enemies,
+.hud-stat,
+.hud-pause,
+.hud-clock {
+  background: var(--mat-sunken);
+  border-radius: var(--r-chip);
+  padding-inline: var(--space-2);
+}
+/*
+ * The visual size of a control and its tap target are allowed to differ, and here they have to:
+ * a 48px button in the top row would add 16px to the HUD, and the field is sized from whatever
+ * height the HUD leaves behind. So the glyph stays compact and an invisible inset carries the full
+ * touch area around it — the finger gets its 48px, the map does not pay for it.
+ */
+.hud-pause {
+  position: relative;
+  min-width: 34px;
+  min-height: 34px;
+}
+.hud-pause::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+/* A menu is open: the game UI gets out of the way rather than sitting on top of it. */
+.field-wrap:has(> .pause-overlay:not([hidden])) ~ .hud,
+.game-screen:has(.pause-overlay:not([hidden])) .hud,
+.game-screen:has(.pause-overlay:not([hidden])) .touch-layer {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
 }

@@ -60,7 +60,11 @@ export function storeScreen(root: HTMLElement): () => void {
         for (const cur of ['coins', 'gems', 'usd'] as const) {
           if (item.prices[cur] === undefined) continue;
           const b = button([h('span', { class: `${cur === 'coins' ? 'coin-icon' : cur === 'gems' ? 'gem-icon' : ''}` }), priceText(item, cur)], {
-            kind: cur === 'usd' ? 'accent' : 'primary',
+            // Neutral face, tinted label: in a list every row's action is equal, and filling five
+            // of them would put the emphasis everywhere, which is the same as nowhere. The one
+            // recommended item fills its button instead (see `.store-item.best` in screens.css).
+            kind: 'secondary',
+            className: 'buy',
             testid: `buy-${item.sku}-${cur}`,
             disabled: !s.online,
             onClick: (e) => void buy(cur, e.currentTarget as HTMLButtonElement),

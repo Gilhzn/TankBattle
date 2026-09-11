@@ -32,7 +32,7 @@ export function menuScreen(root: HTMLElement): () => void {
       // A badge is not worth surfacing an error over; it simply stays hidden.
     }
   };
-  const dailyBtn = button(t('menu.daily'), { kind: 'accent', testid: 'menu-daily', className: 'daily-btn', onClick: () => openDailyModal() });
+  const dailyBtn = button(t('menu.daily'), { kind: 'secondary', testid: 'menu-daily', className: 'daily-btn', onClick: () => openDailyModal() });
   const installBtn = button(t('menu.install'), { kind: 'ghost', className: 'small', onClick: async () => { await installPrompt?.prompt(); installPrompt = null; installBtn.hidden = true; } });
   installBtn.hidden = !installPrompt;
 
@@ -73,21 +73,28 @@ export function menuScreen(root: HTMLElement): () => void {
       h('h1', { class: 'logo' }, h('span', { class: 'logo-a' }, BRAND.logo[0]), h('span', { class: 'logo-b' }, BRAND.logo[1]), h('span', { class: 'logo-sub' }, 'ONLINE')),
       h('p', { class: 'tagline' }, t('app.tagline')),
     ),
+    // Grouped by what each thing is for, and how often it is reached for: the two ways to start a
+    // match, then what you spend on your tank, then the people you play with, then the rest. The
+    // grouping is done with space alone — headings here would be chrome standing in for structure,
+    // and the labels already say what each button is.
     h('nav', { class: 'menu-nav' },
-      nav(t('menu.playSolo'), '/play', 'menu-play-solo', 'info'),
-      nav(t('menu.multiplayer'), '/lobby', 'menu-multiplayer', 'primary'),
-      h('div', { class: 'menu-grid' },
+      h('div', { class: 'menu-group menu-group-lead' },
+        nav(t('menu.playSolo'), '/play', 'menu-play-solo'),
+        nav(t('menu.multiplayer'), '/lobby', 'menu-multiplayer', 'primary'),
+      ),
+      h('div', { class: 'menu-group menu-grid' },
         nav(t('menu.store'), '/store', 'menu-store'),
         nav(t('menu.garage'), '/garage', 'menu-garage'),
         nav(t('menu.battlepass'), '/battlepass', 'menu-battlepass'),
         nav(t('menu.gifts'), '/gifts', 'menu-gifts', 'secondary', giftsBadge),
+      ),
+      h('div', { class: 'menu-group menu-grid' },
         nav(t('menu.friends'), '/friends', 'menu-friends', 'secondary', friendsBadge),
         nav(t('menu.profile'), '/profile', 'menu-profile'),
         nav(t('menu.leaderboard'), '/leaderboard', 'menu-leaderboard'),
         nav(t('menu.settings'), '/settings', 'menu-settings'),
       ),
-      dailyBtn,
-      installBtn,
+      h('div', { class: 'menu-group' }, dailyBtn, installBtn),
     ),
     h('div', { class: 'menu-footer' }, h('span', { class: 'offline-hint', dataset: { testid: 'offline-hint' } })),
   );

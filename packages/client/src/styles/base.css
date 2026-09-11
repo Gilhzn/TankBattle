@@ -91,8 +91,16 @@ button:disabled {
   display: none !important;
 }
 
-/* ---------- buttons ---------- */
-/* Buttons are physical: dark keyline, lit face, and a solid bottom edge that compresses on press. */
+/* ---------- buttons ----------
+ * One neutral control, and exactly one tinted primary per surface. That scarcity is the whole
+ * point: when every button is its own saturated colour, none of them leads. `.accent`, `.info` and
+ * `.confirm` are kept as names the screens already use, but they resolve to the same neutral
+ * treatment — `.primary` and `.danger` are the only two that take a tint, one because it is the
+ * action and one because it is a warning.
+ *
+ * Press feedback extends *past* the control's own edge. On a phone the finger covers the button, so
+ * a highlight drawn only inside it is invisible at exactly the moment it is needed.
+ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -100,57 +108,54 @@ button:disabled {
   gap: var(--space-2);
   min-height: var(--tap);
   padding: 0 var(--space-5);
-  border-radius: var(--radius);
-  font-family: var(--font-display);
-  font-weight: 800;
+  border-radius: var(--r-capsule);
+  font-family: var(--font);
+  font-weight: 650;
   font-size: var(--fs);
-  letter-spacing: 0.02em;
-  border: var(--stroke) solid var(--keyline);
-  background: var(--plate-raised);
+  letter-spacing: 0;
+  border: var(--stroke) solid var(--mat-hairline);
+  background: var(--mat-raised);
+  -webkit-backdrop-filter: var(--mat-blur);
+  backdrop-filter: var(--mat-blur);
   color: var(--fg);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
   box-shadow:
-    inset 0 var(--stroke) 0 var(--bevel),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-    0 var(--edge) 0 #0a1120,
-    0 calc(var(--edge) + 5px) 14px rgba(0, 0, 0, 0.45);
-  transform: translateY(0);
+    inset 0 1px 0 var(--bevel-soft),
+    var(--shadow);
   transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease,
+    transform 0.12s cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 0.12s ease,
     filter 0.15s ease;
   position: relative;
   text-decoration: none;
 }
 .btn:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
 }
 .btn:active:not(:disabled) {
-  transform: translateY(calc(var(--edge) * var(--motion)));
+  transform: scale(calc(1 - 0.03 * var(--motion)));
   box-shadow:
-    inset 0 var(--stroke) 0 var(--bevel-soft),
-    inset 0 2px 6px rgba(0, 0, 0, 0.4),
-    0 0 0 #0a1120,
-    0 2px 6px rgba(0, 0, 0, 0.4);
+    inset 0 1px 0 var(--bevel-soft),
+    0 0 0 4px rgba(255, 255, 255, 0.14),
+    0 0 22px 6px rgba(255, 255, 255, 0.12),
+    var(--shadow);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .btn:disabled {
-  filter: grayscale(0.6) brightness(0.7);
-  box-shadow:
-    inset 0 var(--stroke) 0 var(--bevel-soft),
-    0 var(--edge-sm) 0 #0a1120;
+  opacity: 0.42;
 }
 .btn.big {
-  min-height: 58px;
+  min-height: 56px;
   font-size: var(--fs-l);
+  font-weight: 700;
   width: 100%;
-  border-radius: var(--radius-l);
 }
 .btn.small {
-  min-height: 36px;
-  padding: 0 var(--space-3);
+  min-height: 38px;
+  padding: 0 var(--space-4);
   font-size: var(--fs-s);
-  border-radius: var(--radius-s);
-  --edge: var(--edge-sm);
 }
 .btn.icon {
   width: var(--tap);
@@ -158,88 +163,73 @@ button:disabled {
   border-radius: 50%;
 }
 .btn.icon.small {
-  width: 36px;
-  min-height: 36px;
+  width: 38px;
+  min-height: 38px;
 }
 
-/* Coloured faces keep the same anatomy: light top, deep bottom, darker solid edge. */
+/* The one tinted control. Everything else on the surface defers to it. */
 .btn.primary {
-  background: linear-gradient(180deg, #ffdf8f 0%, var(--brass) 45%, var(--brass-deep) 100%);
-  color: var(--ink);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--accent-ink);
+  font-weight: 750;
   box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.55),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.2),
-    0 var(--edge) 0 var(--brass-edge),
-    0 calc(var(--edge) + 6px) 18px rgba(224, 140, 18, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 6px 22px rgba(224, 140, 18, 0.28);
 }
 .btn.primary:active:not(:disabled) {
   box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.3),
-    inset 0 2px 6px rgba(0, 0, 0, 0.25),
-    0 0 0 var(--brass-edge),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 4px rgba(255, 194, 71, 0.26),
+    0 0 26px 8px rgba(255, 194, 71, 0.22);
 }
-.btn.accent {
-  background: linear-gradient(180deg, #ff9ad9 0%, var(--magenta) 45%, var(--magenta-deep) 100%);
-  color: #2a0418;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
+
+/* Semantic, not decorative: this one is a warning, so it keeps its colour. */
+.btn.danger {
+  background: linear-gradient(180deg, var(--danger) 0%, var(--danger-deep) 100%);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #2b0707;
+  font-weight: 750;
   box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.45),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.2),
-    0 var(--edge) 0 var(--magenta-edge),
-    0 calc(var(--edge) + 6px) 18px rgba(204, 47, 140, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 6px 22px rgba(211, 59, 59, 0.26);
 }
-.btn.accent:active:not(:disabled) {
+.btn.danger:active:not(:disabled) {
   box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.25),
-    inset 0 2px 6px rgba(0, 0, 0, 0.25),
-    0 0 0 var(--magenta-edge),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 0 0 4px rgba(255, 107, 107, 0.26),
+    0 0 26px 8px rgba(255, 107, 107, 0.2);
+}
+
+/*
+ * Kept so existing markup keeps working, but they no longer paint: a screen full of differently
+ * coloured buttons is the thing this redesign exists to remove. Each now carries its meaning with a
+ * tinted label on the shared neutral face.
+ */
+.btn.accent,
+.btn.info,
+.btn.confirm {
+  background: var(--mat-raised);
+  color: var(--fg);
 }
 .btn.info {
-  background: linear-gradient(180deg, #b9f1ff 0%, var(--cyan) 45%, var(--cyan-deep) 100%);
-  color: #04212f;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
-  box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.5),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.2),
-    0 var(--edge) 0 var(--cyan-edge),
-    0 calc(var(--edge) + 6px) 18px rgba(42, 134, 216, 0.35);
-}
-.btn.info:active:not(:disabled) {
-  box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.25),
-    inset 0 2px 6px rgba(0, 0, 0, 0.25),
-    0 0 0 var(--cyan-edge),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--cyan);
 }
 .btn.confirm {
-  background: linear-gradient(180deg, #d8ff9e 0%, var(--lime) 45%, var(--lime-deep) 100%);
-  color: #10240a;
-  box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.5),
-    0 var(--edge) 0 var(--lime-edge),
-    0 calc(var(--edge) + 6px) 18px rgba(111, 191, 31, 0.3);
+  color: var(--lime);
 }
-.btn.danger {
-  background: linear-gradient(180deg, #ff9d9d 0%, var(--danger) 45%, var(--danger-deep) 100%);
-  color: #2b0707;
-  box-shadow:
-    inset 0 var(--stroke) 0 rgba(255, 255, 255, 0.4),
-    0 var(--edge) 0 var(--danger-edge),
-    0 calc(var(--edge) + 6px) 18px rgba(211, 59, 59, 0.3);
+.btn.accent {
+  color: var(--magenta);
 }
 .btn.ghost {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    inset 0 1px 0 var(--bevel-soft),
-    0 var(--edge-sm) 0 rgba(0, 0, 0, 0.35);
+  background: transparent;
+  border-color: var(--mat-hairline-soft);
+  box-shadow: none;
+  color: var(--fg-muted);
 }
 .btn.ghost:active:not(:disabled) {
-  transform: translateY(calc(var(--edge-sm) * var(--motion)));
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
 }
 .btn .badge {
   position: absolute;
@@ -383,12 +373,16 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
 }
 
 /* tabs */
+/* Scroll edges fade rather than being cut by a hard boundary — the row reads as continuing, which
+   is the point of a scrolling bar, instead of looking clipped. */
 .tabs {
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
   padding-block: var(--space-2);
   scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
 }
 .tab {
   flex: 1 0 auto;
@@ -400,10 +394,13 @@ html[dir='rtl'] .switch input:checked + .switch-track .switch-knob {
   font-weight: 600;
   white-space: nowrap;
 }
+/* Selection is a fill, not a colour: the raised material says "this one", so the accent stays
+   unspent for the screen's actual action. */
 .tab.active {
-  background: rgba(94, 225, 255, 0.16);
-  border-color: rgba(94, 225, 255, 0.5);
+  background: var(--mat-raised);
+  border-color: var(--mat-hairline);
   color: var(--fg);
+  font-weight: 700;
 }
 
 /* chips */
